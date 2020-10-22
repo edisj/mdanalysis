@@ -36,8 +36,70 @@ import numpy as np
 from MDAnalysis import coordinates
 from MDAnalysis.core.groups import AtomGroup
 from MDAnalysis.lib.log import ProgressBar
+from MDAnalysis.lib.util import timeit
 
 logger = logging.getLogger(__name__)
+
+
+class Timing(object):
+    """
+    store various timeing results obtained during an analysis run
+    """
+
+    def __init__(self, io, compute, total, prepare,
+                 conclude, io_block=None,
+                 compute_block=None):
+        self._io = io
+        self._io_block = io_block
+        self._compute = compute
+        self._compute_block = compute_block
+        self._total = total
+        self._cumulate = io + compute
+        self._prepare = prepare
+        self._conclude = conclude
+
+    @property
+    def io(self):
+        """io time per frame"""
+        return self._io
+
+    @property
+    def io_block(self):
+        """io time per block"""
+        return self._io_block
+
+    @property
+    def compute(self):
+        """compute time per frame"""
+        return self._compute
+
+    @property
+    def compute_block(self):
+        """compute time per block"""
+        return self._compute_block
+
+    @property
+    def total(self):
+        """wall time"""
+        return self._total
+
+    @property
+    def cumulate_time(self):
+        """cumulative time of io and compute for each frame. This isn't equal to
+        `self.total / n_jobs` because `self.total` also includes the scheduler
+        overhead
+        """
+        return self._cumulate
+
+    @property
+    def prepare(self):
+        """time to prepare"""
+        return self._prepare
+
+    @property
+    def conclude(self):
+        """time to conclude"""
+        return self._conclude
 
 
 class AnalysisBase(object):
@@ -182,18 +244,32 @@ class AnalysisBase(object):
 
         self._setup_frames(self._trajectory, start, stop, step)
         logger.info("Starting preparation")
-        self._prepare()
-        for i, ts in enumerate(ProgressBar(
-                self._trajectory[self.start:self.stop:self.step],
-                verbose=verbose)):
-            self._frame_index = i
-            self._ts = ts
-            self.frames[i] = ts.frame
-            self.times[i] = ts.time
-            # logger.info("--> Doing frame {} of {}".format(i+1, self.n_frames))
-            self._single_frame()
-        logger.info("Finishing up")
-        self._conclude()
+        time_io = 0
+        time_compute = 0
+        with timeit() as t_total:
+            with timeit() as t_prepare:
+                self._prepare()
+            time_prepare = t_prepare.elapsed
+            for i, t in ProgressBar(enumerate(range(self.start, self.stop, self.step)),
+                                    verbose=verbose):
+                self._frame_index = i
+                with timeit() as t_io:
+                    ts = self._ts = self._trajectory[t]
+                time_io += t_io.elapsed
+                self.frames[i] = ts.frame
+                self.times[i] = ts.time
+                # logger.info("--> Doing frame {} of {}".format(i+1, self.n_frames))
+                with timeit() as t_compute:
+                    self._single_frame()
+                time_compute += t_compute.elapsed
+            logger.info("Finishing up")
+            with timeit() as t_conclude:
+                self._conclude()
+            time_conclude = t_conclude.elapsed
+        time_total = t_total.elapsed
+
+        self.timing = Timing(time_io, time_compute, time_total,
+                             time_prepare, time_conclude)
         return self
 
 
