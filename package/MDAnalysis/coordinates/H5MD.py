@@ -189,6 +189,7 @@ import numpy as np
 import MDAnalysis as mda
 from . import base, core
 from ..exceptions import NoDataError
+from MDAnalysis.lib.util import timeit
 try:
     import h5py
 except ImportError:
@@ -204,6 +205,69 @@ except ImportError:
 
 else:
     HAS_H5PY = True
+
+
+class Timing(object):
+    """
+    store various timeing results obtained during an analysis run
+    """
+
+    def __init__(self, open_traj, n_atoms, set_units,
+                 copy_data, box, pos, vel, force, convert_units):
+        self._open_traj = open_traj
+        self._n_atoms = n_atoms
+        self._set_units = set_units
+        self._copy_data = copy_data
+        self._box = box
+        self._pos = pos
+        self._vel = vel
+        self._force = force
+        self._convert_units = convert_units
+
+    @property
+    def open_traj(self):
+        """time to open trajectory file"""
+        return self._open_traj
+
+    @property
+    def n_atoms(self):
+        """io time per block"""
+        return self._n_atoms
+
+    @property
+    def set_units(self):
+        """time to set units dictionary"""
+        return self._set_units
+
+    @property
+    def copy_data(self):
+        """time to copy to data dictionary"""
+        return self._copy_data
+
+    @property
+    def box(self):
+        """time to fill box dimensions"""
+        return self._box
+
+    @property
+    def position(self):
+        """time to fill positions array"""
+        return self._pos
+
+    @property
+    def velocity(self):
+        """time to fill velocities array"""
+        return self._vel
+
+    @property
+    def force(self):
+        """time to fill forces array"""
+        return self._force
+
+    @property
+    def convert_units(self):
+        """time to convert units"""
+        return self._convert_units
 
 
 class Timestep(base.Timestep):
@@ -434,11 +498,12 @@ class H5MDReader(base.ReaderBase):
         if (self._comm is not None) and (self._driver != 'mpio'):
             raise ValueError("If MPI communicator object is used to open"
                              " h5md file, ``driver='mpio'`` must be passed.")
-
-        self.open_trajectory()
-        if self._particle_group['box'].attrs['dimension'] != 3:
-            raise ValueError("MDAnalysis only supports 3-dimensional"
-                             " simulation boxes")
+        with timeit() as time_open_traj:
+            self.open_trajectory()
+            if self._particle_group['box'].attrs['dimension'] != 3:
+                raise ValueError("MDAnalysis only supports 3-dimensional"
+                                 " simulation boxes")
+        self._t_open_traj = time_open_traj.elapsed
 
         # _has dictionary used for checking whether h5md file has
         # 'position', 'velocity', or 'force' groups in the file
@@ -446,13 +511,15 @@ class H5MDReader(base.ReaderBase):
                      name in ('position', 'velocity', 'force')}
 
         # Gets n_atoms from first available group
-        for name, value in self._has.items():
-            if value:
-                self.n_atoms = self._particle_group[name]['value'].shape[1]
-                break
-        else:
-            raise NoDataError("Provide at least a position, velocity"
-                              " or force group in the h5md file.")
+        with timeit() as time_n_atoms:
+            for name, value in self._has.items():
+                if value:
+                    self.n_atoms = self._particle_group[name]['value'].shape[1]
+                    break
+            else:
+                raise NoDataError("Provide at least a position, velocity"
+                                  " or force group in the h5md file.")
+        self._t_n_atoms = time_n_atoms.elapsed
 
         self.ts = self._Timestep(self.n_atoms,
                                  positions=self.has_positions,
@@ -464,7 +531,10 @@ class H5MDReader(base.ReaderBase):
                       'length': None,
                       'velocity': None,
                       'force': None}
-        self._set_translated_units()  # fills units dictionary
+        with timeit() as time_set_units:
+            self._set_translated_units()  # fills units dictionary
+        self._t_set_units = time_set_units.elapsed
+
         self._read_next_timestep()
 
     def _set_translated_units(self):
@@ -561,6 +631,7 @@ class H5MDReader(base.ReaderBase):
 
     def open_trajectory(self):
         """opens the trajectory file using h5py library"""
+        #with timeit() as time_open_traj:
         self._frame = -1
         if isinstance(self.filename, h5py.File):
             self._file = self.filename
@@ -582,6 +653,7 @@ class H5MDReader(base.ReaderBase):
         # allows for arbitrary name of group1 in 'particles'
         self._particle_group = self._file['particles'][
             list(self._file['particles'])[0]]
+        #self._t_open_traj = time_open_traj.elapsed
 
     @property
     def n_frames(self):
@@ -611,27 +683,43 @@ class H5MDReader(base.ReaderBase):
         # fills data dictionary from 'observables' group
         # Note: dt is not read into data as it is not decided whether
         # Timestep should have a dt attribute (see Issue #2825)
-        self._copy_to_data()
+        with timeit() as time_copy_data:
+            self._copy_to_data()
+        self._t_copy_data = time_copy_data.elapsed
 
         # Sets frame box dimensions
         # Note: H5MD files must contain 'box' group in each 'particles' group
-        if 'edges' in particle_group['box'] and ts._unitcell is not None:
-            ts._unitcell[:] = particle_group['box/edges/value'][frame, :]
-        else:
-            # sets ts.dimensions = None
-            ts._unitcell = None
+        with timeit() as time_box:
+            if 'edges' in particle_group['box'] and ts._unitcell is not None:
+                ts._unitcell[:] = particle_group['box/edges/value'][frame, :]
+            else:
+                # sets ts.dimensions = None
+                ts._unitcell = None
+        self._t_box = time_box.elapsed
 
         # set the timestep positions, velocities, and forces with
         # current frame dataset
         if self._has['position']:
-            ts.positions = self._get_frame_dataset('position')
+            with timeit() as time_pos:
+                ts.positions = self._get_frame_dataset('position')
+            self._t_pos = time_pos.elapsed
         if self._has['velocity']:
-            ts.velocities = self._get_frame_dataset('velocity')
+            with timeit() as time_vel:
+                ts.velocities = self._get_frame_dataset('velocity')
+            self._t_vel = time_vel.elapsed
         if self._has['force']:
-            ts.forces = self._get_frame_dataset('force')
+            with timeit() as time_force:
+                ts.forces = self._get_frame_dataset('force')
+            self._t_force = time_force.elapsed
 
         if self.convert_units:
-            self._convert_units()
+            with timeit() as time_convert_units:
+                self._convert_units()
+            self._t_convert_units = time_convert_units.elapsed
+
+        ts.timing = Timing(self._t_open_traj, self._t_n_atoms,
+                           self._t_set_units, self._t_copy_data, self._t_box,
+                           self._t_pos, self._t_vel, self._t_force, self._t_convert_units)
 
         return ts
 
