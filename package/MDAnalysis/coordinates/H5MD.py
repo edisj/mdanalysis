@@ -213,13 +213,14 @@ class Timing(object):
     """
 
     def __init__(self, open_traj, n_atoms, set_units,
-                 copy_data, box, pos, vel, force, convert_units):
+                 copy_data, box, get_pos, set_pos, convert_units):
         self._open_traj = open_traj
         self._n_atoms = n_atoms
         self._set_units = set_units
         self._copy_data = copy_data
         self._box = box
-        self._pos = pos
+        self._get_pos = get_pos
+        self._set_pos = set_pos
         self._vel = vel
         self._force = force
         self._convert_units = convert_units
@@ -231,7 +232,7 @@ class Timing(object):
 
     @property
     def n_atoms(self):
-        """io time per block"""
+        """time to set n_atoms"""
         return self._n_atoms
 
     @property
@@ -250,19 +251,14 @@ class Timing(object):
         return self._box
 
     @property
-    def position(self):
+    def get_position(self):
+        """time to get positions array"""
+        return self._get_pos
+
+    @property
+    def set_position(self):
         """time to fill positions array"""
-        return self._pos
-
-    @property
-    def velocity(self):
-        """time to fill velocities array"""
-        return self._vel
-
-    @property
-    def force(self):
-        """time to fill forces array"""
-        return self._force
+        return self._set_pos
 
     @property
     def convert_units(self):
@@ -699,18 +695,19 @@ class H5MDReader(base.ReaderBase):
 
         # set the timestep positions, velocities, and forces with
         # current frame dataset
-        with timeit() as time_pos:
-            if self._has['position']:
-                ts.positions = self._get_frame_dataset('position')
-        self._t_pos = time_pos.elapsed
-        with timeit() as time_vel:
-            if self._has['velocity']:
-                ts.velocities = self._get_frame_dataset('velocity')
-        self._t_vel = time_vel.elapsed
-        with timeit() as time_force:
-            if self._has['force']:
-                ts.forces = self._get_frame_dataset('force')
-        self._t_force = time_force.elapsed
+        if self._has['position']:
+            with timeit() as time_get_pos_dataset:
+                x = self._get_frame_dataset('position')
+            with timeit() as time_set_ts_pos:
+                ts.positions = x
+        self._t_get_pos_dataset = time_get_pos_dataset.elapsed
+        self._t_set_ts_pos = time_set_ts_pos.elapsed
+
+        if self._has['velocity']:
+            ts.velocities = self._get_frame_dataset('velocity')
+        if self._has['force']:
+            ts.forces = self._get_frame_dataset('force')
+
 
         with timeit() as time_convert_units:
             if self.convert_units:
@@ -719,7 +716,7 @@ class H5MDReader(base.ReaderBase):
 
         ts.timing = Timing(self._t_open_traj, self._t_n_atoms,
                            self._t_set_units, self._t_copy_data, self._t_box,
-                           self._t_pos, self._t_vel, self._t_force, self._t_convert_units)
+                           self._t_get_dataset, self._t_set_ts_pos, self._t_convert_units)
 
         return ts
 
