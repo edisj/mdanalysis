@@ -716,7 +716,7 @@ class H5MDReader(base.ReaderBase):
 
         ts.timing = Timing(self._t_open_traj, self._t_n_atoms,
                            self._t_set_units, self._t_copy_data, self._t_box,
-                           self._t_get_dataset, self._t_set_ts_pos, self._t_convert_units)
+                           self._t_get_pos_dataset, self._t_set_ts_pos, self._t_convert_units)
 
         return ts
 
