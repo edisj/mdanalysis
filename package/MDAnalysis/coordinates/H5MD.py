@@ -221,8 +221,6 @@ class Timing(object):
         self._box = box
         self._get_pos = get_pos
         self._set_pos = set_pos
-        self._vel = vel
-        self._force = force
         self._convert_units = convert_units
 
     @property
