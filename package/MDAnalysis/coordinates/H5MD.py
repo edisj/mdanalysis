@@ -694,7 +694,7 @@ class H5MDReader(base.ReaderBase):
         # set the timestep positions, velocities, and forces with
         # current frame dataset
         if frame == 0:
-            pos_buffer = np.empty(shape=(n_atoms,3), dtype='f4')
+            pos_buffer = np.empty(shape=(self.n_atoms,3), dtype='f4')
 
         if self._has['position']:
             with timeit() as time_get_pos_dataset:
