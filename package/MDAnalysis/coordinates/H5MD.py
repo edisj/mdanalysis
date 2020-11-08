@@ -443,6 +443,7 @@ class H5MDReader(base.ReaderBase):
                  convert_units=True,
                  driver=None,
                  comm=None,
+                 sub=None,
                  **kwargs):
         """
         Parameters
@@ -456,6 +457,10 @@ class H5MDReader(base.ReaderBase):
         comm : :class:`MPI.Comm` (optional)
             MPI communicator used to open H5MD file
             Must be passed with `'mpio'` file driver
+        sub : array_like (optional)
+            `sub` is an array of indices to pick out the corresponding
+            coordinates and load only them; this requires that the topology
+            itself is that of the sub system.
         **kwargs : dict
             General reader arguments.
 
@@ -484,6 +489,7 @@ class H5MDReader(base.ReaderBase):
         super(H5MDReader, self).__init__(filename, **kwargs)
         self.filename = filename
         self.convert_units = convert_units
+        self._sub = sub
 
         # if comm is provided, driver must be 'mpio' and file will be
         # opened with parallel h5py/hdf5 enabled
@@ -508,8 +514,12 @@ class H5MDReader(base.ReaderBase):
         with timeit() as time_n_atoms:
             for name, value in self._has.items():
                 if value:
-                    self.n_atoms = self._particle_group[name]['value'].shape[1]
-                    break
+                    if self._sub is not None:
+                        self.n_atoms = self._particle_group[name]['value'][0, self._sub].shape[0]
+                        break
+                    else:
+                        self.n_atoms = self._particle_group[name]['value'][0].shape[0]
+                        break
             else:
                 raise NoDataError("Provide at least a position, velocity"
                                   " or force group in the h5md file.")
@@ -693,9 +703,6 @@ class H5MDReader(base.ReaderBase):
 
         # set the timestep positions, velocities, and forces with
         # current frame dataset
-        if frame == 0:
-            pos_buffer = np.empty(shape=(self.n_atoms,3), dtype='f4')
-
         if self._has['position']:
             with timeit() as time_get_pos_dataset:
                 pos_buffer = self._get_frame_dataset('position')
@@ -740,8 +747,13 @@ class H5MDReader(base.ReaderBase):
     def _get_frame_dataset(self, dataset):
         """retrieves dataset array at current frame"""
 
-        frame_dataset = self._particle_group[
-            dataset]['value'][self._frame, :]
+        if self._sub is not None:
+            frame_dataset = self._particle_group[
+                dataset]['value'][self._frame, self._sub]
+        else:
+            frame_dataset = self._particle_group[
+                dataset]['value'][self._frame]
+
         n_atoms_now = frame_dataset.shape[0]
         if n_atoms_now != self.n_atoms:
             raise ValueError("Frame {} has {} atoms but the initial frame"
