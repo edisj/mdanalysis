@@ -518,7 +518,7 @@ class H5MDReader(base.ReaderBase):
                         self.n_atoms = self._particle_group[name]['value'][0, self._sub].shape[0]
                         break
                     else:
-                        self.n_atoms = self._particle_group[name]['value'][0].shape[0]
+                        self.n_atoms = len(self._sub)
                         break
             else:
                 raise NoDataError("Provide at least a position, velocity"
