@@ -443,7 +443,7 @@ class H5MDReader(base.ReaderBase):
                  convert_units=True,
                  driver=None,
                  comm=None,
-                 sub=None,
+                 #sub=None,
                  **kwargs):
         """
         Parameters
@@ -489,7 +489,7 @@ class H5MDReader(base.ReaderBase):
         super(H5MDReader, self).__init__(filename, **kwargs)
         self.filename = filename
         self.convert_units = convert_units
-        self._sub = sub
+        #self._sub = sub
 
         # if comm is provided, driver must be 'mpio' and file will be
         # opened with parallel h5py/hdf5 enabled
@@ -514,12 +514,12 @@ class H5MDReader(base.ReaderBase):
         with timeit() as time_n_atoms:
             for name, value in self._has.items():
                 if value:
-                    if self._sub is not None:
-                        self.n_atoms = self._particle_group[name]['value'][0, self._sub].shape[0]
-                        break
-                    else:
-                        self.n_atoms = len(self._sub)
-                        break
+                    #if self._sub is not None:
+                        #self.n_atoms = len(self._sub)
+                        #break
+                    #else:
+                    self.n_atoms = self._particle_group[name]['value'][0].shape[0]
+                    break
             else:
                 raise NoDataError("Provide at least a position, velocity"
                                   " or force group in the h5md file.")
@@ -747,12 +747,12 @@ class H5MDReader(base.ReaderBase):
     def _get_frame_dataset(self, dataset):
         """retrieves dataset array at current frame"""
 
-        if self._sub is not None:
-            frame_dataset = self._particle_group[
-                dataset]['value'][self._frame, self._sub]
-        else:
-            frame_dataset = self._particle_group[
-                dataset]['value'][self._frame]
+        #if self._sub is not None:
+        #    frame_dataset = self._particle_group[
+        #        dataset]['value'][self._frame, self._sub]
+        #else:
+        frame_dataset = self._particle_group[
+            dataset]['value'][self._frame]
 
         n_atoms_now = frame_dataset.shape[0]
         if n_atoms_now != self.n_atoms:
