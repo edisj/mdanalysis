@@ -443,7 +443,6 @@ class H5MDReader(base.ReaderBase):
                  convert_units=True,
                  driver=None,
                  comm=None,
-                 #sub=None,
                  **kwargs):
         """
         Parameters
@@ -457,10 +456,6 @@ class H5MDReader(base.ReaderBase):
         comm : :class:`MPI.Comm` (optional)
             MPI communicator used to open H5MD file
             Must be passed with `'mpio'` file driver
-        sub : array_like (optional)
-            `sub` is an array of indices to pick out the corresponding
-            coordinates and load only them; this requires that the topology
-            itself is that of the sub system.
         **kwargs : dict
             General reader arguments.
 
@@ -514,10 +509,6 @@ class H5MDReader(base.ReaderBase):
         with timeit() as time_n_atoms:
             for name, value in self._has.items():
                 if value:
-                    #if self._sub is not None:
-                        #self.n_atoms = len(self._sub)
-                        #break
-                    #else:
                     self.n_atoms = self._particle_group[name]['value'][0].shape[0]
                     break
             else:
@@ -747,10 +738,6 @@ class H5MDReader(base.ReaderBase):
     def _get_frame_dataset(self, dataset):
         """retrieves dataset array at current frame"""
 
-        #if self._sub is not None:
-        #    frame_dataset = self._particle_group[
-        #        dataset]['value'][self._frame, self._sub]
-        #else:
         frame_dataset = self._particle_group[
             dataset]['value'][self._frame]
 
