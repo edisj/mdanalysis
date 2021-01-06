@@ -186,9 +186,11 @@ Classes
 """
 
 import numpy as np
+import numpy.ma as ma
 import MDAnalysis as mda
 from . import base, core
 from ..exceptions import NoDataError
+from MDAnalysis.lib.util import timeit
 try:
     import h5py
 except ImportError:
@@ -204,6 +206,63 @@ except ImportError:
 
 else:
     HAS_H5PY = True
+
+
+class Timing(object):
+    """
+    store various timeing results obtained during an analysis run
+    """
+
+    def __init__(self, open_traj, n_atoms, set_units,
+                 copy_data, box, get_pos, set_pos, convert_units):
+        self._open_traj = open_traj
+        self._n_atoms = n_atoms
+        self._set_units = set_units
+        self._copy_data = copy_data
+        self._box = box
+        self._get_pos = get_pos
+        self._set_pos = set_pos
+        self._convert_units = convert_units
+
+    @property
+    def open_traj(self):
+        """time to open trajectory file"""
+        return self._open_traj
+
+    @property
+    def n_atoms(self):
+        """time to set n_atoms"""
+        return self._n_atoms
+
+    @property
+    def set_units(self):
+        """time to set units dictionary"""
+        return self._set_units
+
+    @property
+    def copy_data(self):
+        """time to copy to data dictionary"""
+        return self._copy_data
+
+    @property
+    def box(self):
+        """time to fill box dimensions"""
+        return self._box
+
+    @property
+    def get_position(self):
+        """time to get positions array"""
+        return self._get_pos
+
+    @property
+    def set_position(self):
+        """time to fill positions array"""
+        return self._set_pos
+
+    @property
+    def convert_units(self):
+        """time to convert units"""
+        return self._convert_units
 
 
 class Timestep(base.Timestep):
@@ -233,6 +292,181 @@ class Timestep(base.Timestep):
     @dimensions.setter
     def dimensions(self, box):
         self._unitcell[:] = core.triclinic_vectors(box)
+
+    @property
+    def has_positions(self):
+        """A boolean of whether this Timestep has position data
+
+        This can be changed to ``True`` or ``False`` to allocate space for
+        or remove the data.
+
+        .. versionadded:: 0.11.0
+        """
+        return self._has_positions
+
+    @has_positions.setter
+    def has_positions(self, val):
+        if val and not self._has_positions:
+            # Setting this will always reallocate position data
+            # ie
+            # True -> False -> True will wipe data from first True state
+            if self._sub is None:
+                self._pos = np.zeros((self.n_atoms, 3), dtype=np.float32,
+                                      order=self.order)
+            else:
+                self._pos = ma.zeros((self.n_atoms, 3), dtype=np.float32,
+                                      order=self.order)
+                self._pos.mask = self._mask
+                self._pos.set_fill_value(np.NaN)
+                self._pos.harden_mask()
+            self._has_positions = True
+        elif not val:
+            # Unsetting val won't delete the numpy array
+            self._has_positions = False
+
+    @property
+    def positions(self):
+        """A record of the positions of all atoms in this Timestep
+
+        Setting this attribute will add positions to the Timestep if they
+        weren't originally present.
+
+        Returns
+        -------
+        positions : numpy.ndarray with dtype numpy.float32
+               position data of shape ``(n_atoms, 3)`` for all atoms
+
+        Raises
+        ------
+        :exc:`MDAnalysis.exceptions.NoDataError`
+               if the Timestep has no position data
+
+
+        .. versionchanged:: 0.11.0
+           Now can raise :exc:`NoDataError` when no position data present
+        """
+        if self.has_positions:
+            return self._pos
+        else:
+            raise NoDataError("This Timestep has no positions")
+
+    @positions.setter
+    def positions(self, new):
+        self.has_positions = True
+        if self._sub is not None:
+            self._pos[self._sub] = new
+        else:
+            self._pos[:] = new
+
+    @property
+    def has_velocities(self):
+        """A boolean of whether this Timestep has velocity data
+
+        This can be changed to ``True`` or ``False`` to allocate space for
+        or remove the data.
+
+        .. versionadded:: 0.11.0
+        """
+        return self._has_velocities
+
+    @has_velocities.setter
+    def has_velocities(self, val):
+        if val and not self._has_velocities:
+            self._velocities = np.zeros((self.n_atoms, 3), dtype=np.float32,
+                                        order=self.order)
+            if self._sub is not None:
+                self._velocities = ma.masked_array(self._velocities, mask=self._mask)
+            self._has_velocities = True
+        elif not val:
+            self._has_velocities = False
+
+    @property
+    def velocities(self):
+        """A record of the velocities of all atoms in this Timestep
+
+        Setting this attribute will add velocities to the Timestep if they
+        weren't originally present.
+
+        Returns
+        -------
+        velocities : numpy.ndarray with dtype numpy.float32
+               velocity data of shape ``(n_atoms, 3)`` for all atoms
+
+        Raises
+        ------
+        :exc:`MDAnalysis.exceptions.NoDataError`
+               if the Timestep has no velocity data
+
+
+        .. versionadded:: 0.11.0
+        """
+        if self.has_velocities:
+            return self._velocities
+        else:
+            raise NoDataError("This Timestep has no velocities")
+
+    @velocities.setter
+    def velocities(self, new):
+        self.has_velocities = True
+        if self._sub is not None:
+            self._velocities[self._sub] = new
+        else:
+            self._velocities[:] = new
+
+    @property
+    def has_forces(self):
+        """A boolean of whether this Timestep has force data
+
+        This can be changed to ``True`` or ``False`` to allocate space for
+        or remove the data.
+
+        .. versionadded:: 0.11.0
+        """
+        return self._has_forces
+
+    @has_forces.setter
+    def has_forces(self, val):
+        if val and not self._has_forces:
+            self._forces = np.zeros((self.n_atoms, 3), dtype=np.float32,
+                                    order=self.order)
+            if self._sub is not None:
+                self._forces = ma.masked_array(self._forces, mask=self._mask)
+            self._has_forces = True
+        elif not val:
+            self._has_forces = False
+
+    @property
+    def forces(self):
+        """A record of the forces of all atoms in this Timestep
+
+        Setting this attribute will add forces to the Timestep if they
+        weren't originally present.
+
+        Returns
+        -------
+        forces : numpy.ndarray with dtype numpy.float32
+               force data of shape ``(n_atoms, 3)`` for all atoms
+
+        Raises
+        ------
+        :exc:`MDAnalysis.exceptions.NoDataError`
+               if the Timestep has no force data
+
+
+        .. versionadded:: 0.11.0
+        """
+        if self.has_forces:
+            return self._forces
+        else:
+            raise NoDataError("This Timestep has no forces")
+
+    @forces.setter
+    def forces(self, new):
+        self.has_forces = True
+        if self._sub is not None:
+            self._forces[self._sub] = new
+        else:
+            self._forces[:] = new
 
 
 class H5MDReader(base.ReaderBase):
@@ -385,6 +619,7 @@ class H5MDReader(base.ReaderBase):
                  convert_units=True,
                  driver=None,
                  comm=None,
+                 sub=None,
                  **kwargs):
         """
         Parameters
@@ -398,6 +633,10 @@ class H5MDReader(base.ReaderBase):
         comm : :class:`MPI.Comm` (optional)
             MPI communicator used to open H5MD file
             Must be passed with `'mpio'` file driver
+        sub : array_like (optional)
+            `sub` is an array of indices to pick out the corresponding
+            coordinates and load only them; this requires that the topology
+            itself is that of the sub system.
         **kwargs : dict
             General reader arguments.
 
@@ -426,6 +665,7 @@ class H5MDReader(base.ReaderBase):
         super(H5MDReader, self).__init__(filename, **kwargs)
         self.filename = filename
         self.convert_units = convert_units
+        self._sub = sub
 
         # if comm is provided, driver must be 'mpio' and file will be
         # opened with parallel h5py/hdf5 enabled
@@ -435,10 +675,12 @@ class H5MDReader(base.ReaderBase):
             raise ValueError("If MPI communicator object is used to open"
                              " h5md file, ``driver='mpio'`` must be passed.")
 
-        self.open_trajectory()
-        if self._particle_group['box'].attrs['dimension'] != 3:
-            raise ValueError("MDAnalysis only supports 3-dimensional"
-                             " simulation boxes")
+        with timeit() as time_open_traj:
+            self.open_trajectory()
+            if self._particle_group['box'].attrs['dimension'] != 3:
+                raise ValueError("MDAnalysis only supports 3-dimensional"
+                                 " simulation boxes")
+        self._t_open_traj = time_open_traj.elapsed
 
         # _has dictionary used for checking whether h5md file has
         # 'position', 'velocity', or 'force' groups in the file
@@ -446,25 +688,31 @@ class H5MDReader(base.ReaderBase):
                      name in ('position', 'velocity', 'force')}
 
         # Gets n_atoms from first available group
-        for name, value in self._has.items():
-            if value:
-                self.n_atoms = self._particle_group[name]['value'].shape[1]
-                break
-        else:
-            raise NoDataError("Provide at least a position, velocity"
-                              " or force group in the h5md file.")
+        with timeit() as time_n_atoms:
+            for name, value in self._has.items():
+                if value:
+                    self.n_atoms = self._particle_group[name]['value'][0].shape[0]
+                    break
+            else:
+                raise NoDataError("Provide at least a position, velocity"
+                                  " or force group in the h5md file.")
+        self._t_n_atoms = time_n_atoms.elapsed
 
         self.ts = self._Timestep(self.n_atoms,
                                  positions=self.has_positions,
                                  velocities=self.has_velocities,
                                  forces=self.has_forces,
+                                 sub=self._sub,
                                  **self._ts_kwargs)
 
         self.units = {'time': None,
                       'length': None,
                       'velocity': None,
                       'force': None}
-        self._set_translated_units()  # fills units dictionary
+        with timeit() as time_set_units:
+            self._set_translated_units()  # fills units dictionary
+        self._t_set_units = time_set_units.elapsed
+
         self._read_next_timestep()
 
     def _set_translated_units(self):
@@ -600,7 +848,8 @@ class H5MDReader(base.ReaderBase):
             else:
                 raise NoDataError("Provide at least a position, velocity"
                                   " or force group in the h5md file.")
-        except ValueError:
+        except (ValueError, IndexError):
+            # ValueError h5py version 2, IndexError h5py version 3
             raise IOError from None
 
         self._frame = frame
@@ -611,27 +860,43 @@ class H5MDReader(base.ReaderBase):
         # fills data dictionary from 'observables' group
         # Note: dt is not read into data as it is not decided whether
         # Timestep should have a dt attribute (see Issue #2825)
-        self._copy_to_data()
+        with timeit() as time_copy_data:
+            self._copy_to_data()
+        self._t_copy_data = time_copy_data.elapsed
 
         # Sets frame box dimensions
         # Note: H5MD files must contain 'box' group in each 'particles' group
-        if 'edges' in particle_group['box'] and ts._unitcell is not None:
-            ts._unitcell[:] = particle_group['box/edges/value'][frame, :]
-        else:
-            # sets ts.dimensions = None
-            ts._unitcell = None
+        with timeit() as time_box:
+            if 'edges' in particle_group['box'] and ts._unitcell is not None:
+                ts._unitcell[:] = particle_group['box/edges/value'][frame, :]
+            else:
+                # sets ts.dimensions = None
+                ts._unitcell = None
+        self._t_box = time_box.elapsed
 
         # set the timestep positions, velocities, and forces with
         # current frame dataset
         if self._has['position']:
-            ts.positions = self._get_frame_dataset('position')
+            with timeit() as time_get_pos_dataset:
+                pos_buffer = self._get_frame_dataset('position')
+            with timeit() as time_set_ts_pos:
+                ts.positions = pos_buffer
+        self._t_get_pos_dataset = time_get_pos_dataset.elapsed
+        self._t_set_ts_pos = time_set_ts_pos.elapsed
+
         if self._has['velocity']:
             ts.velocities = self._get_frame_dataset('velocity')
         if self._has['force']:
             ts.forces = self._get_frame_dataset('force')
 
-        if self.convert_units:
-            self._convert_units()
+        with timeit() as time_convert_units:
+            if self.convert_units:
+                self._convert_units()
+        self._t_convert_units = time_convert_units.elapsed
+
+        ts.timing = Timing(self._t_open_traj, self._t_n_atoms,
+                           self._t_set_units, self._t_copy_data, self._t_box,
+                           self._t_get_pos_dataset, self._t_set_ts_pos, self._t_convert_units)
 
         return ts
 
@@ -654,16 +919,33 @@ class H5MDReader(base.ReaderBase):
     def _get_frame_dataset(self, dataset):
         """retrieves dataset array at current frame"""
 
-        frame_dataset = self._particle_group[
-            dataset]['value'][self._frame, :]
-        n_atoms_now = frame_dataset.shape[0]
-        if n_atoms_now != self.n_atoms:
-            raise ValueError("Frame {} has {} atoms but the initial frame"
-                             " has {} atoms. MDAnalysis is unable to deal"
-                             " with variable topology!"
-                             "".format(self._frame,
-                                       n_atoms_now,
-                                       self.n_atoms))
+        if self._sub is None:
+            # read all data from hdf5 file
+            frame_dataset = self._particle_group[dataset][
+                                                'value'][self._frame, :]
+
+            n_atoms_now = frame_dataset.shape[0]
+            if n_atoms_now != self.n_atoms:
+                raise ValueError("Frame {} has {} atoms but the initial frame"
+                                 " has {} atoms. MDAnalysis is unable to deal"
+                                 " with variable topology!"
+                                 "".format(self._frame,
+                                           n_atoms_now,
+                                           self.n_atoms))
+        else:
+            # only read indexed subset from hdf5 file given by self._sub
+            frame_dataset = self._particle_group[dataset][
+                                                'value'][self._frame,
+                                                         self._sub]
+            n_atoms_now = frame_dataset.shape[0]
+            if n_atoms_now != len(self._sub):
+                raise ValueError("Frame {} has {} atoms but the initial frame"
+                                 " has {} atoms. MDAnalysis is unable to deal"
+                                 " with variable topology!"
+                                 "".format(self._frame,
+                                           n_atoms_now,
+                                           self.n_atoms))
+
         return frame_dataset
 
     def _convert_units(self):

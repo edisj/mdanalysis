@@ -272,6 +272,10 @@ class Timestep(object):
         # self.frame to 0
         self.frame = -1
         self._n_atoms = n_atoms
+        self._sub = kwargs.get('sub', None)
+        if self._sub is not None:
+            self._mask = np.ones((self.n_atoms,3), dtype=bool)
+            self._mask[self._sub] = False
 
         self.data = {}
 
