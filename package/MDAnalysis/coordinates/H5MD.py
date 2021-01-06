@@ -23,25 +23,20 @@
 """
 H5MD trajectories --- :mod:`MDAnalysis.coordinates.H5MD`
 ========================================================
-
 The `H5MD`_ trajectory file format is based upon the general, high performance
 `HDF5`_ file format.
 HDF5 files are self documenting and can be accessed with the `h5py`_ library.
 HDF5 can make use of parallel file system features through the MPI-IO
 interface of the HDF5 library to improve parallel reads and writes.
-
 The HDF5 library and `h5py`_ must be installed; otherwise, H5MD files
 cannot be read by MDAnalysis. If `h5py`_ is not installed, a
 :exc:`RuntimeError` is raised.
-
 Units
 -----
-
 H5MD files are very flexible and can store data in a wide range of physical
 units. The :class:`H5MDReader` will attempt to match the units in order to
 convert all data to the standard MDAnalysis units (see
 :mod:`MDAnalysis.units`).
-
 Units are read from the attributes of the position, velocity, force, and time
 datasets provided by the H5MD file. The unit string is translated from `H5MD
 notation`_ to `MDAnalysis notation`_. If MDAnalysis does not recognize the unit
@@ -51,47 +46,35 @@ MDAnalysis stores a value of ``None`` for each unit.  If the H5MD file does not
 contain units and ``convert_units=True``, MDAnalysis will raise a
 :exc`ValueError`. To load a universe from an H5MD file with no units, set
 ``convert_units=False``.
-
-
 Example: Loading an H5MD simulation
 -----------------------------------
-
 To load an H5MD simulation from an H5MD trajectory data file (using the
 :class:`~MDAnalysis.coordinates.H5MD.H5MDReader`), pass the topology
 and trajectory files to :class:`~MDAnalysis.core.universe.Universe`::
-
     import MDAnalysis as mda
     u = mda.Universe("topology.tpr", "trajectory.h5md")
-
 It is also possible to pass an open :class:`h5py.File` file stream
 into the reader::
-
     import MDAnalysis as mda
     with h5py.File("trajectory.h5md", 'r') as f:
          u = mda.Universe("topology.tpr", f)
-
 .. Note:: Directly using a `h5py.File` does not work yet.
    See issue `#2884 <https://github.com/MDAnalysis/mdanalysis/issues/2884>`_.
-
 Example: Opening an H5MD file in parallel
 -----------------------------------------
-
 The parallel features of HDF5 can be accessed through h5py
 (see `parallel h5py docs`_ for more detail) by using the `mpi4py`_ Python
 package with a Parallel build of HDF5. To load a an H5MD simulation with
 parallel HDF5, pass `driver` and `comm` arguments to
 :class:`~MDAnalysis.core.universe.Universe`::
-
     import MDAnalysis as mda
     from mpi4py import MPI
     u = mda.Universe("topology.tpr", "trajectory.h5md",
                      driver="mpio", comm=MPI.COMM_WORLD)
-
 .. Note::
    :mod:`h5py` must be built with parallel features enabled on top of a parallel
    HDF5 build, and HDF5 and :mod:`mpi4py` must be built with a working MPI
    implementation. See instructions below.
-
 Building parallel h5py and HDF5 on Linux
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Building a working parallel HDF5/h5py/mpi4py environment can be
@@ -99,44 +82,32 @@ challenging and is often specific to your local computing resources,
 e.g., the supercomputer that you're running on typically already has
 its preferred MPI installation. As a starting point we provide
 instructions that worked in a specific, fairly generic environment.
-
 These instructions successfully built parallel HDF5/h5py
 with *OpenMPI 4.0.4*, *HDF5 1.10.6*, *h5py 2.9.0*, and *mpi4py 3.0.3*
 on *Ubuntu 16.0.6*. You may have to play around with different combinations of
 versions of h5py/HDF5 to get a working parallel build.
-
     1. `Build MPI from sources`_
     2. `Build HDF5 from sources`_ with parallel settings enabled:
-
        .. code-block:: bash
-
           ./configure --enable-parallel --enable-shared
           make
           make install
-
     3. `Install mpi4py`_, making sure to point `mpicc` to where you've
        installed your MPI implemenation:
-
        .. code-block:: bash
-
           env MPICC=/path/to/mpicc pip install mpi4py
-
     4. `Build h5py from sources`_, making sure to enable mpi and to point
        to your parallel build of HDF5:
-
        .. code-block:: bash
-
           export HDF5_PATH=path-to-parallel-hdf5
           python setup.py clean --all
           python setup.py configure -r --hdf5-version=X.Y.Z --mpi --hdf5=$HDF5_PATH
           export gcc=gcc
           CC=mpicc HDF5_DIR=$HDF5_PATH python setup.py build
           python setup.py install
-
 If you have questions or want to share how you managed to build
 parallel hdf5/h5py/mpi4py please let everyone know on the
 `MDAnalysis forums`_.
-
 .. _`H5MD`: https://nongnu.org/h5md/index.html
 .. _`HDF5`: https://www.hdfgroup.org/solutions/hdf5/
 .. _`H5PY`: http://docs.h5py.org/
@@ -149,46 +120,33 @@ parallel hdf5/h5py/mpi4py please let everyone know on the
 .. _`H5MD notation`: https://nongnu.org/h5md/modules/units.html
 .. _`MDAnalysis notation`: https://userguide.mdanalysis.org/units.html
 .. _`MDAnalysis forums`: https://www.mdanalysis.org/#participating
-
-
 Classes
 -------
-
 .. autoclass:: Timestep
    :members:
-
    .. attribute:: positions
-
       coordinates of the atoms as a :class:`numpy.ndarray` of shape
       `(n_atoms, 3)`
-
    .. attribute:: velocities
-
       velocities of the atoms as a :class:`numpy.ndarray` of shape
       `(n_atoms, 3)`; only available if the trajectory contains velocities
       or if the `velocities` = ``True`` keyword has been supplied.
-
    .. attribute:: forces
-
       forces of the atoms as a :class:`numpy.ndarray` of shape
       `(n_atoms, 3)`; only available if the trajectory contains forces
       or if the `forces` = ``True`` keyword has been supplied.
-
-
 .. autoclass:: H5MDReader
    :members:
-
    .. automethod:: H5MDReader._reopen
-
 .. autoclass:: H5PYPicklable
    :members:
-
 """
 
 import numpy as np
 import MDAnalysis as mda
 from . import base, core
 from ..exceptions import NoDataError
+from MDAnalysis.lib.util import timeit
 try:
     import h5py
 except ImportError:
@@ -206,6 +164,63 @@ else:
     HAS_H5PY = True
 
 
+class Timing(object):
+    """
+    store various timeing results obtained during an analysis run
+    """
+
+    def __init__(self, open_traj, n_atoms, set_units,
+                 copy_data, box, get_pos, set_pos, convert_units):
+        self._open_traj = open_traj
+        self._n_atoms = n_atoms
+        self._set_units = set_units
+        self._copy_data = copy_data
+        self._box = box
+        self._get_pos = get_pos
+        self._set_pos = set_pos
+        self._convert_units = convert_units
+
+    @property
+    def open_traj(self):
+        """time to open trajectory file"""
+        return self._open_traj
+
+    @property
+    def n_atoms(self):
+        """time to set n_atoms"""
+        return self._n_atoms
+
+    @property
+    def set_units(self):
+        """time to set units dictionary"""
+        return self._set_units
+
+    @property
+    def copy_data(self):
+        """time to copy to data dictionary"""
+        return self._copy_data
+
+    @property
+    def box(self):
+        """time to fill box dimensions"""
+        return self._box
+
+    @property
+    def get_position(self):
+        """time to get positions array"""
+        return self._get_pos
+
+    @property
+    def set_position(self):
+        """time to fill positions array"""
+        return self._set_pos
+
+    @property
+    def convert_units(self):
+        """time to convert units"""
+        return self._convert_units
+
+
 class Timestep(base.Timestep):
     """H5MD Timestep
     """
@@ -217,10 +232,8 @@ class Timestep(base.Timestep):
     @property
     def dimensions(self):
         """unitcell dimensions (*A*, *B*, *C*, *alpha*, *beta*, *gamma*)
-
         lengths *A*, *B*, *C* are in the MDAnalysis length unit (Å), and
         angles are in degrees.
-
         Setting dimensions will populate the underlying native format
         description (triclinic box vectors). If `edges
         <https://nongnu.org/h5md/h5md.html#simulation-box>`_ is a matrix,
@@ -237,37 +250,28 @@ class Timestep(base.Timestep):
 
 class H5MDReader(base.ReaderBase):
     r"""Reader for the H5MD format.
-
     See `h5md documentation <https://nongnu.org/h5md/h5md.html>`_
     for a detailed overview of the H5MD file format.
-
     The reader attempts to convert units in the trajectory file to
     the standard MDAnalysis units (:mod:`MDAnalysis.units`) if
     `convert_units` is set to ``True``.
-
     Additional data in the *observables* group of the H5MD file are
     loaded into the :attr:`Timestep.data` dictionary.
-
     Only 3D-periodic boxes or no periodicity are supported; for no
     periodicity, :attr:`Timestep.dimensions` will return ``None``.
-
     Although H5MD can store varying numbers of particles per time step
     as produced by, e.g., GCMC simulations, MDAnalysis can currently
     only process a fixed number of particles per step. If the number
     of particles changes a :exc:`ValueError` is raised.
-
     The :class:`H5MDReader` reads .h5md files with the following
     HDF5 hierarchy:
-
     .. code-block:: text
-
         Notation:
         (name) is an HDF5 group that the reader recognizes
         {name} is an HDF5 group with arbitrary name
         [variable] is an HDF5 dataset
         <dtype> is dataset datatype
         +-- is an attribute of a group or dataset
-
         H5MD root
          \-- (h5md)
             +-- version <int>
@@ -316,21 +320,15 @@ class H5MDReader(base.ReaderBase):
                 \-- [step] <int>, gives frame
                 \-- [time] <float>, gives time
                 \-- [value] <int>, gives integration step
-
-
     .. note::
         The reader does not currently read mass or charge data.
-
     .. note::
         If the `driver` and `comm` arguments were used to open the
         hdf5 file (specifically, ``driver="mpio"``) then the :meth:`_reopen`
         method does *not* close and open the file like most readers because
         the information about the MPI communicator would be lost; instead
         it rewinds the trajectory back to the first timestep.
-
-
     .. versionadded:: 2.0.0
-
     """
 
     format = 'H5MD'
@@ -400,7 +398,6 @@ class H5MDReader(base.ReaderBase):
             Must be passed with `'mpio'` file driver
         **kwargs : dict
             General reader arguments.
-
         Raises
         ------
         RuntimeError
@@ -419,13 +416,13 @@ class H5MDReader(base.ReaderBase):
         NoDataError
             when the H5MD file has no 'position', 'velocity', or
             'force' group
-
         """
         if not HAS_H5PY:
             raise RuntimeError("Please install h5py")
         super(H5MDReader, self).__init__(filename, **kwargs)
         self.filename = filename
         self.convert_units = convert_units
+        #self._sub = sub
 
         # if comm is provided, driver must be 'mpio' and file will be
         # opened with parallel h5py/hdf5 enabled
@@ -434,11 +431,12 @@ class H5MDReader(base.ReaderBase):
         if (self._comm is not None) and (self._driver != 'mpio'):
             raise ValueError("If MPI communicator object is used to open"
                              " h5md file, ``driver='mpio'`` must be passed.")
-
-        self.open_trajectory()
-        if self._particle_group['box'].attrs['dimension'] != 3:
-            raise ValueError("MDAnalysis only supports 3-dimensional"
-                             " simulation boxes")
+        with timeit() as time_open_traj:
+            self.open_trajectory()
+            if self._particle_group['box'].attrs['dimension'] != 3:
+                raise ValueError("MDAnalysis only supports 3-dimensional"
+                                 " simulation boxes")
+        self._t_open_traj = time_open_traj.elapsed
 
         # _has dictionary used for checking whether h5md file has
         # 'position', 'velocity', or 'force' groups in the file
@@ -446,13 +444,15 @@ class H5MDReader(base.ReaderBase):
                      name in ('position', 'velocity', 'force')}
 
         # Gets n_atoms from first available group
-        for name, value in self._has.items():
-            if value:
-                self.n_atoms = self._particle_group[name]['value'].shape[1]
-                break
-        else:
-            raise NoDataError("Provide at least a position, velocity"
-                              " or force group in the h5md file.")
+        with timeit() as time_n_atoms:
+            for name, value in self._has.items():
+                if value:
+                    self.n_atoms = self._particle_group[name]['value'][0].shape[0]
+                    break
+            else:
+                raise NoDataError("Provide at least a position, velocity"
+                                  " or force group in the h5md file.")
+        self._t_n_atoms = time_n_atoms.elapsed
 
         self.ts = self._Timestep(self.n_atoms,
                                  positions=self.has_positions,
@@ -464,7 +464,10 @@ class H5MDReader(base.ReaderBase):
                       'length': None,
                       'velocity': None,
                       'force': None}
-        self._set_translated_units()  # fills units dictionary
+        with timeit() as time_set_units:
+            self._set_translated_units()  # fills units dictionary
+        self._t_set_units = time_set_units.elapsed
+
         self._read_next_timestep()
 
     def _set_translated_units(self):
@@ -561,6 +564,7 @@ class H5MDReader(base.ReaderBase):
 
     def open_trajectory(self):
         """opens the trajectory file using h5py library"""
+        #with timeit() as time_open_traj:
         self._frame = -1
         if isinstance(self.filename, h5py.File):
             self._file = self.filename
@@ -582,6 +586,7 @@ class H5MDReader(base.ReaderBase):
         # allows for arbitrary name of group1 in 'particles'
         self._particle_group = self._file['particles'][
             list(self._file['particles'])[0]]
+        #self._t_open_traj = time_open_traj.elapsed
 
     @property
     def n_frames(self):
@@ -611,27 +616,44 @@ class H5MDReader(base.ReaderBase):
         # fills data dictionary from 'observables' group
         # Note: dt is not read into data as it is not decided whether
         # Timestep should have a dt attribute (see Issue #2825)
-        self._copy_to_data()
+        with timeit() as time_copy_data:
+            self._copy_to_data()
+        self._t_copy_data = time_copy_data.elapsed
 
         # Sets frame box dimensions
         # Note: H5MD files must contain 'box' group in each 'particles' group
-        if 'edges' in particle_group['box'] and ts._unitcell is not None:
-            ts._unitcell[:] = particle_group['box/edges/value'][frame, :]
-        else:
-            # sets ts.dimensions = None
-            ts._unitcell = None
+        with timeit() as time_box:
+            if 'edges' in particle_group['box'] and ts._unitcell is not None:
+                ts._unitcell[:] = particle_group['box/edges/value'][frame, :]
+            else:
+                # sets ts.dimensions = None
+                ts._unitcell = None
+        self._t_box = time_box.elapsed
 
         # set the timestep positions, velocities, and forces with
         # current frame dataset
         if self._has['position']:
-            ts.positions = self._get_frame_dataset('position')
+            with timeit() as time_get_pos_dataset:
+                pos_buffer = self._get_frame_dataset('position')
+            with timeit() as time_set_ts_pos:
+                ts.positions = pos_buffer
+        self._t_get_pos_dataset = time_get_pos_dataset.elapsed
+        self._t_set_ts_pos = time_set_ts_pos.elapsed
+
         if self._has['velocity']:
             ts.velocities = self._get_frame_dataset('velocity')
         if self._has['force']:
             ts.forces = self._get_frame_dataset('force')
 
-        if self.convert_units:
-            self._convert_units()
+
+        with timeit() as time_convert_units:
+            if self.convert_units:
+                self._convert_units()
+        self._t_convert_units = time_convert_units.elapsed
+
+        ts.timing = Timing(self._t_open_traj, self._t_n_atoms,
+                           self._t_set_units, self._t_copy_data, self._t_box,
+                           self._t_get_pos_dataset, self._t_set_ts_pos, self._t_convert_units)
 
         return ts
 
@@ -655,7 +677,8 @@ class H5MDReader(base.ReaderBase):
         """retrieves dataset array at current frame"""
 
         frame_dataset = self._particle_group[
-            dataset]['value'][self._frame, :]
+            dataset]['value'][self._frame]
+
         n_atoms_now = frame_dataset.shape[0]
         if n_atoms_now != self.n_atoms:
             raise ValueError("Frame {} has {} atoms but the initial frame"
@@ -669,7 +692,6 @@ class H5MDReader(base.ReaderBase):
     def _convert_units(self):
         """converts time, position, velocity, and force values if they
         are not given in MDAnalysis standard units
-
         See https://userguide.mdanalysis.org/1.0.0/units.html
         """
 
@@ -697,16 +719,13 @@ class H5MDReader(base.ReaderBase):
 
     def _reopen(self):
         """reopen trajectory
-
         Note
         ----
-
         If the `driver` and `comm` arguments were used to open the
         hdf5 file (specifically, ``driver="mpio"``) then this method
         does *not* close and open the file like most readers because
         the information about the MPI communicator would be lost; instead
         it rewinds the trajectory back to the first timstep.
-
         """
         if self._driver == "mpio":  # pragma: no cover
             self._read_frame(-1)
@@ -756,42 +775,33 @@ class H5MDReader(base.ReaderBase):
 
 class H5PYPicklable(h5py.File):
     """H5PY file object (read-only) that can be pickled.
-
     This class provides a file-like object (as returned by
     :class:`h5py.File`) that,
     unlike standard Python file objects,
     can be pickled. Only read mode is supported.
-
     When the file is pickled, filename, mode, driver, and comm of
     :class:`h5py.File` in the file are saved. On unpickling, the file
     is opened by filename, mode, driver. This means that for a successful
     unpickle, the original file still has to be accessible with its filename.
-
     Parameters
     ----------
     filename : str or file-like
         a filename given a text or byte string.
     driver : str (optional)
         H5PY file driver used to open H5MD file
-
     Example
     -------
     ::
-
         f = H5PYPicklable('filename', 'r')
         print(f['particles/trajectory/position/value'][0])
         f.close()
-
     can also be used as context manager::
-
         with H5PYPicklable('filename', 'r'):
             print(f['particles/trajectory/position/value'][0])
-
     Note
     ----
     Pickling of an `h5py.File` opened with `driver="mpio"` and an MPI
     communicator is currently not supported
-
     See Also
     ---------
     :class:`MDAnalysis.lib.picklable_file_io.FileIOPicklable`
@@ -799,8 +809,6 @@ class H5PYPicklable(h5py.File):
     :class:`MDAnalysis.lib.picklable_file_io.TextIOPicklable`
     :class:`MDAnalysis.lib.picklable_file_io.GzipPicklable`
     :class:`MDAnalysis.lib.picklable_file_io.BZ2Picklable`
-
-
     .. versionadded:: 2.0.0
     """
 

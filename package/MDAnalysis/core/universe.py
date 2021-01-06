@@ -583,6 +583,46 @@ class Universe(object):
         .. versionadded:: 0.16.0
         """
         from ..coordinates.memory import MemoryReader
+        from ..coordinates.H5MD import H5MDReader
+
+        if isinstance(self.trajectory, H5MDReader):
+            n_frames = len(range(
+                *self.trajectory.check_slice_indices(start, stop, step)
+            ))
+            n_atoms = len(self.atoms)
+            coordinates = np.zeros((n_frames, n_atoms, 3), dtype=np.float32)
+            group = self.trajectory._particle_group
+            ts = self.trajectory.ts
+            has_vels = ts.has_velocities
+            has_fors = ts.has_forces
+            has_dims = ts.dimensions is not None
+
+            velocities = np.zeros_like(coordinates) if has_vels else None
+            forces = np.zeros_like(coordinates) if has_fors else None
+            dimensions = (np.zeros((n_frames, 6), dtype=np.float32)
+                          if has_dims else None)
+
+            np.copyto(coordinates, group['position/value'][()])
+            if has_vels:
+                np.copyto(velocities, group['velocity/value'][()])
+            if has_fors:
+                np.copyto(forces, group['force/value'][()])
+            #if has_dims:
+                #np.copyto(dimensions, group['box/edges/value'][()])
+
+            # Overwrite trajectory in universe with an MemoryReader
+            # object, to provide fast access and allow coordinates
+            # to be manipulated
+            if step is None:
+                step = 1
+            self.trajectory = MemoryReader(
+                coordinates,
+                dimensions=dimensions,
+                dt=self.trajectory.ts.dt * step,
+                filename=self.trajectory.filename,
+                velocities=velocities,
+                forces=forces,
+            )
 
         if not isinstance(self.trajectory, MemoryReader):
             n_frames = len(range(

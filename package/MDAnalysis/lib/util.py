@@ -23,21 +23,15 @@
 r"""
 Helper functions --- :mod:`MDAnalysis.lib.util`
 ====================================================
-
 Small helper functions that don't fit anywhere else.
-
 .. versionchanged:: 0.11.0
    Moved mathematical functions into lib.mdamath
-
 .. versionchanged::2.0.0
    The following aliases, that existed for compatibility with python versions
    older than 3.6, were removed: `callable` for the built-in of the same name,
    `PathLike` for :class:`os.PathLike`, and `bz_open` for :func:`bz2.open`.
-
-
 Files and directories
 ---------------------
-
 .. autofunction:: filename
 .. autofunction:: openany
 .. autofunction:: anyopen
@@ -48,10 +42,8 @@ Files and directories
 .. autofunction:: check_compressed_format
 .. autofunction:: format_from_filename_extension
 .. autofunction:: guess_format
-
 Streams
 -------
-
 Many of the readers are not restricted to just reading files. They can
 also use gzip-compressed or bzip2-compressed files (through the
 internal use of :func:`openany`). It is also possible to provide more
@@ -61,34 +53,26 @@ into a :class:`NamedStream`. This :class:`NamedStream` can then be
 used in place of an ordinary file name (typically, with a
 class:`~MDAnalysis.core.universe.Universe` but it is also possible to
 *write* to such a stream using :func:`MDAnalysis.Writer`).
-
 .. rubric: Examples
-
 In the following example, we use a PDB stored as a string ``pdb_s``::
-
    import MDAnalysis
    from MDAnalysis.lib.util import NamedStream
    from io import StringIO
-
    pdb_s = "TITLE     Lonely Ion\\nATOM      1  NA  NA+     1      81.260  64.982  10.926  1.00  0.00\\n"
    u = MDAnalysis.Universe(NamedStream(StringIO(pdb_s), "ion.pdb"))
    print(u)
    #  <Universe with 1 atoms>
    print(u.atoms.positions)
    # [[ 81.26000214  64.98200226  10.92599964]]
-
 It is important to provide a proper pseudo file name with the correct extension
 (".pdb") to :class:`NamedStream` because the file type recognition uses the
 extension of the file name to determine the file format or alternatively
 provide the ``format="pdb"`` keyword argument to the
 :class:`~MDAnalysis.core.universe.Universe`.
-
 The use of streams becomes more interesting when MDAnalysis is used as glue
 between different analysis packages and when one can arrange things so that
 intermediate frames (typically in the PDB format) are not written to disk but
 remain in memory via e.g. :class:`io.StringIO` buffers.
-
-
 .. The following does *not* work because most readers need to
 .. reopen files, which is not possible with http streams. Might
 .. need to implement a buffer.
@@ -101,79 +85,56 @@ remain in memory via e.g. :class:`io.StringIO` buffers.
 ..   URI = "https://mdanalysis.googlecode.com/git-history/develop/testsuite/MDAnalysisTests/data/mini.data"
 ..   urldata = NamedStream(urllib2.urlopen(URI), "mini.data")
 ..   u = MDAnalysis.Universe(urldata)
-
 .. Note::  A remote connection created by :func:`urllib2.urlopen` is not seekable
            and therefore will often not work as an input. But try it...
-
 .. autoclass:: NamedStream
    :members:
-
 .. autofunction:: isstream
-
 Containers and lists
 --------------------
-
 .. autofunction:: iterable
 .. autofunction:: asiterable
 .. autofunction:: hasmethod
 .. autoclass:: Namespace
-
 Arrays
 ------
-
 .. autofunction:: unique_int_1d(values)
 .. autofunction:: unique_rows
 .. autofunction:: blocks_of
 .. autofunction:: group_same_or_consecutive_integers
-
 File parsing
 ------------
-
 .. autoclass:: FORTRANReader
    :members:
 .. autodata:: FORTRAN_format_regex
-
 Data manipulation and handling
 ------------------------------
-
 .. autofunction:: fixedwidth_bins
 .. autofunction:: get_weights
 .. autofunction:: ltruncate_int
 .. autofunction:: flatten_dict
-
 Strings
 -------
-
 .. autofunction:: convert_aa_code
 .. autofunction:: parse_residue
 .. autofunction:: conv_float
-
 Class decorators
 ----------------
-
 .. autofunction:: cached
-
 Function decorators
 -------------------
-
 .. autofunction:: static_variables
 .. autofunction:: warn_if_not_unique
 .. autofunction:: check_coords
-
 Code management
 ---------------
-
 .. autofunction:: deprecate
 .. autoclass:: _Deprecate
 .. autofunction:: dedent_docstring
-
 Data format checks
 ------------------
-
 .. autofunction:: check_box
-
 .. Rubric:: Footnotes
-
 .. [#NamedStreamClose] The reason why :meth:`NamedStream.close` does
    not close a stream by default (but just rewinds it to the
    beginning) is so that one can use the class :class:`NamedStream` as
@@ -202,6 +163,7 @@ import warnings
 import functools
 from functools import wraps
 import textwrap
+import time
 
 import mmtf
 import numpy as np
@@ -222,7 +184,6 @@ except ImportError:
 
 def filename(name, ext=None, keep=False):
     """Return a new name that has suffix attached; replaces other extensions.
-
     Parameters
     ----------
     name : str or NamedStream
@@ -234,8 +195,6 @@ def filename(name, ext=None, keep=False):
     keep : bool
         - ``False``: replace existing extension with `ext`;
         - ``True``: keep old extension if one existed
-
-
     .. versionchanged:: 0.9.0
        Also permits :class:`NamedStream` to pass through.
     """
@@ -256,19 +215,15 @@ def filename(name, ext=None, keep=False):
 @contextmanager
 def openany(datasource, mode='rt', reset=True):
     """Context manager for :func:`anyopen`.
-
     Open the `datasource` and close it when the context of the :keyword:`with`
     statement exits.
-
     `datasource` can be a filename or a stream (see :func:`isstream`). A stream
     is reset to its start if possible (via :meth:`~io.IOBase.seek` or
     :meth:`~cString.StringIO.reset`).
-
     The advantage of this function is that very different input sources
     ("streams") can be used for a "file", ranging from files on disk (including
     compressed files) to open file objects to sockets and strings---as long as
     they have a file-like interface.
-
     Parameters
     ----------
     datasource : a file or a stream
@@ -276,23 +231,17 @@ def openany(datasource, mode='rt', reset=True):
         open in r(ead) or w(rite) mode
     reset : bool (optional)
         try to read (`mode` 'r') the stream from the start [``True``]
-
     Examples
     --------
     Open a gzipped file and process it line by line::
-
         with openany("input.pdb.gz") as pdb:
             for line in pdb:
                 if line.startswith('ATOM'):
                     print(line)
-
     Open a URL and read it::
-
        import urllib2
        with openany(urllib2.urlopen("https://www.mdanalysis.org/")) as html:
            print(html.read())
-
-
     See Also
     --------
     :func:`anyopen`
@@ -306,14 +255,11 @@ def openany(datasource, mode='rt', reset=True):
 
 def anyopen(datasource, mode='rt', reset=True):
     """Open datasource (gzipped, bzipped, uncompressed) and return a stream.
-
     `datasource` can be a filename or a stream (see :func:`isstream`). By
     default, a stream is reset to its start if possible (via
     :meth:`~io.IOBase.seek` or :meth:`~cString.StringIO.reset`).
-
     If possible, the attribute ``stream.name`` is set to the filename or
     "<stream>" if no filename could be associated with the *datasource*.
-
     Parameters
     ----------
     datasource
@@ -325,27 +271,21 @@ def anyopen(datasource, mode='rt', reset=True):
         `mode` is used and thus any additional modifiers are silently ignored.
     reset: bool (optional)
         try to read (`mode` 'r') the stream from the start
-
     Returns
     -------
     file-like object
-
     See Also
     --------
     :func:`openany`
       to be used with the :keyword:`with` statement.
-
-
     .. versionchanged:: 0.9.0
        Only returns the ``stream`` and tries to set ``stream.name = filename`` instead of the previous
        behavior to return a tuple ``(stream, filename)``.
-
     .. versionchanged:: 2.0.0
        New read handlers support pickle functionality
        if `datasource` is a filename.
        They return a custom picklable file stream in
        :class:`MDAnalysis.lib.picklable_file_io`.
-
     """
     read_handlers = {'bz2': bz2_pickle_open,
                      'gz': gzip_pickle_open,
@@ -438,27 +378,22 @@ def _get_stream(filename, openfunction=open, mode='r'):
 
 def greedy_splitext(p):
     """Split extension in path *p* at the left-most separator.
-
     Extensions are taken to be separated from the filename with the
     separator :data:`os.extsep` (as used by :func:`os.path.splitext`).
-
     Arguments
     ---------
     p : str
        path
-
     Returns
     -------
     (root, extension) : tuple
           where ``root`` is the full path and filename with all
           extensions removed whereas ``extension`` is the string of
           all extensions.
-
     Example
     -------
     >>> greedy_splitext("/home/joe/protein.pdb.bz2")
     ('/home/joe/protein', '.pdb.bz2')
-
     """
     path, root = os.path.split(p)
     extension = ''
@@ -477,30 +412,21 @@ def hasmethod(obj, m):
 
 def isstream(obj):
     """Detect if `obj` is a stream.
-
     We consider anything a stream that has the methods
-
     - ``close()``
-
     and either set of the following
-
     - ``read()``, ``readline()``, ``readlines()``
     - ``write()``, ``writeline()``, ``writelines()``
-
     Parameters
     ----------
     obj : stream or str
-
     Returns
     -------
     bool
         ``True`` if `obj` is a stream, ``False`` otherwise
-
     See Also
     --------
     :mod:`io`
-
-
     .. versionadded:: 0.9.0
     """
     signature_methods = ("close",)
@@ -521,19 +447,15 @@ def isstream(obj):
 
 def which(program):
     """Determine full path of executable `program` on :envvar:`PATH`.
-
     (Jay at http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python)
-
     Parameters
     ----------
     programe : str
        name of the executable
-
     Returns
     -------
     path : str or None
        absolute path to the executable if it can be found, else ``None``
-
     """
 
     def is_exe(fpath):
@@ -555,67 +477,53 @@ def which(program):
 @functools.total_ordering
 class NamedStream(io.IOBase, os.PathLike):
     """Stream that also provides a (fake) name.
-
     By wrapping a stream `stream` in this class, it can be passed to
     code that uses inspection of the filename to make decisions. For
     instance. :func:`os.path.split` will work correctly on a
     :class:`NamedStream`.
-
     The class can be used as a context manager.
-
     :class:`NamedStream` is derived from :class:`io.IOBase` (to indicate that
     it is a stream). Many operations that normally expect a string will also
     work with a :class:`NamedStream`; for instance, most of the functions in
     :mod:`os.path` will work with the exception of :func:`os.path.expandvars`
     and :func:`os.path.expanduser`, which will return the :class:`NamedStream`
     itself instead of a string if no substitutions were made.
-
     Example
     -------
     Wrap a :class:`io.StringIO` instance to write to::
-
       from io import StringIO
       import os.path
       stream = StringIO()
       f = NamedStream(stream, "output.pdb")
       print(os.path.splitext(f))
-
     Wrap a :class:`file` instance to read from::
-
       stream = open("input.pdb")
       f = NamedStream(stream, stream.name)
-
     Use as a context manager (closes stream automatically when the
     :keyword:`with` block is left)::
-
       with NamedStream(open("input.pdb"), "input.pdb") as f:
          # use f
          print f.closed  # --> False
          # ...
       print f.closed     # --> True
-
     Note
     ----
     This class uses its own :meth:`__getitem__` method so if `stream`
     implements :meth:`stream.__getitem__` then that will be masked and
     this class should not be used.
-
     Warning
     -------
     By default, :meth:`NamedStream.close` will **not close the
     stream** but instead :meth:`~NamedStream.reset` it to the
     beginning. [#NamedStreamClose]_ Provide the ``force=True`` keyword
     to :meth:`NamedStream.close` to always close the stream.
-
     """
 
     def __init__(self, stream, filename, reset=True, close=False):
         """Initialize the :class:`NamedStream` from a `stream` and give it a `name`.
-
         The constructor attempts to rewind the stream to the beginning unless
         the keyword `reset` is set to ``False``. If rewinding fails, a
         :class:`MDAnalysis.StreamWarning` is issued.
-
         Parameters
         ----------
         stream : stream
@@ -629,14 +537,11 @@ class NamedStream(io.IOBase, os.PathLike):
             close the stream when a :keyword:`with` block exits or when
             :meth:`close` is called; note that the default is **not to close
             the stream**
-
         Notes
         -----
         By default, this stream will *not* be closed by :keyword:`with` and
         :meth:`close` (see there) unless the `close` keyword is set to
         ``True``.
-
-
         .. versionadded:: 0.9.0
         """
         # constructing the class from an instance of itself has weird behavior
@@ -699,16 +604,12 @@ class NamedStream(io.IOBase, os.PathLike):
     # caught with __getattr__ (ugly...)
     def close(self, force=False):
         """Reset or close the stream.
-
         If :attr:`NamedStream.close_stream` is set to ``False`` (the default)
         then this method will *not close the stream* and only :meth:`reset` it.
-
         If the *force* = ``True`` keyword is provided, the stream will be
         closed.
-
         .. Note:: This ``close()`` method is non-standard. ``del NamedStream``
                   always closes the underlying stream.
-
         """
         if self.close_stream or force:
             try:
@@ -733,7 +634,6 @@ class NamedStream(io.IOBase, os.PathLike):
 
     def seek(self, offset, whence=os.SEEK_SET):
         """Change the stream position to the given byte `offset` .
-
         Parameters
         ----------
         offset : int
@@ -741,19 +641,16 @@ class NamedStream(io.IOBase, os.PathLike):
              indicated by `whence`.
         whence : {0, 1, 2} (optional)
              Values for `whence` are:
-
                - :data:`io.SEEK_SET` or 0 – start of the stream (the default); `offset`
                  should be zero or positive
                - :data:`io.SEEK_CUR` or 1 – current stream position; `offset` may be
                  negative
                - :data:`io.SEEK_END` or 2 – end of the stream; `offset` is usually
                  negative
-
         Returns
         -------
         int
             the new absolute position in bytes.
-
         """
         try:
             return self.stream.seek(offset, whence)  # file.seek: no kw
@@ -769,13 +666,11 @@ class NamedStream(io.IOBase, os.PathLike):
 
     def truncate(self, *size):
         """Truncate the stream's size to `size`.
-
         Parameters
         ----------
         size : int (optional)
              The `size` defaults to the current position (if no `size` argument
              is supplied). The current file position is not changed.
-
         """
         try:
             return self.stream.truncate(*size)
@@ -784,10 +679,8 @@ class NamedStream(io.IOBase, os.PathLike):
 
     def seekable(self):
         """Return ``True`` if the stream supports random access.
-
         If ``False``, :meth:`seek`, :meth:`tell` and :meth:`truncate` will
         raise :exc:`IOError`.
-
         """
         try:
             return self.stream.seekable()
@@ -796,7 +689,6 @@ class NamedStream(io.IOBase, os.PathLike):
 
     def readable(self):
         """Return ``True`` if the stream can be read from.
-
         If ``False``, :meth:`read` will raise :exc:`IOError`.
         """
         try:
@@ -806,7 +698,6 @@ class NamedStream(io.IOBase, os.PathLike):
 
     def writable(self):
         """Return ``True`` if the stream can be written to.
-
         If ``False``, :meth:`write` will raise :exc:`IOError`.
         """
         try:
@@ -816,7 +707,6 @@ class NamedStream(io.IOBase, os.PathLike):
 
     def flush(self):
         """Flush the write buffers of the stream if applicable.
-
         This does nothing for read-only and non-blocking streams. For file
         objects one also needs to call :func:`os.fsync` to write contents to
         disk.
@@ -828,7 +718,6 @@ class NamedStream(io.IOBase, os.PathLike):
 
     def fileno(self):
         """Return the underlying file descriptor (an integer) of the stream if it exists.
-
         An :exc:`IOError` is raised if the IO object does not use a file descriptor.
         """
         try:
@@ -884,9 +773,7 @@ class NamedStream(io.IOBase, os.PathLike):
 
 def realpath(*args):
     """Join all args and return the real path, rooted at ``/``.
-
     Expands '~', '~user', and environment variables such as :envvar:`$HOME`.
-
     Returns ``None`` if any of the args is ``None``.
     """
     if None in args:
@@ -896,11 +783,9 @@ def realpath(*args):
 
 def get_ext(filename):
     """Return the lower-cased extension of `filename` without a leading dot.
-
     Parameters
     ----------
     filename : str
-
     Returns
     -------
     root : str
@@ -916,25 +801,21 @@ def get_ext(filename):
 
 def check_compressed_format(root, ext):
     """Check if this is a supported gzipped/bzip2ed file format and return UPPERCASE format.
-
     Parameters
     ----------
     root : str
        path of a file, without extension `ext`
     ext : str
        extension (currently only "bz2" and "gz" are recognized as compressed formats)
-
     Returns
     -------
     format : str
        upper case format extension *if* the compression can be handled by
        :func:`openany`
-
     See Also
     --------
     openany : function that is used to open and decompress formats on the fly; only
               compression formats implemented in :func:`openany` are recognized
-
     """
     # XYZReader&others are setup to handle both plain and compressed (bzip2, gz) files
     # ..so if the first file extension is bzip2 or gz, look at the one to the left of it
@@ -950,15 +831,12 @@ def check_compressed_format(root, ext):
 
 def format_from_filename_extension(filename):
     """Guess file format from the file extension.
-
     Parameters
     ----------
     filename : str
-
     Returns
     -------
     format : str
-
     Raises
     ------
     TypeError
@@ -977,30 +855,23 @@ def format_from_filename_extension(filename):
 
 def guess_format(filename):
     """Return the format of `filename`
-
     The current heuristic simply looks at the filename extension and can work
     around compressed format extensions.
-
     Parameters
     ----------
     filename : str or stream
         path to the file or a stream, in which case ``filename.name`` is looked
         at for a hint to the format
-
     Returns
     -------
     format : str
         format specifier (upper case)
-
     Raises
     ------
     ValueError
         if the heuristics are insufficient to guess a supported format
-
-
     .. versionadded:: 0.11.0
        Moved into lib.util
-
     """
     if isstream(filename):
         # perhaps StringIO or open stream
@@ -1039,14 +910,11 @@ def iterable(obj):
 
 def asiterable(obj):
     """Returns `obj` so that it can be iterated over.
-
     A string is *not* detected as and iterable and is wrapped into a :class:`list`
     with a single element.
-
     See Also
     --------
     iterable
-
     """
     if not iterable(obj):
         obj = [obj]
@@ -1069,7 +937,6 @@ def strip(s):
 
 class FixedcolumnEntry(object):
     """Represent an entry at specific fixed columns.
-
     Reads from line[start:stop] and converts according to
     typespecifier.
     """
@@ -1085,7 +952,6 @@ class FixedcolumnEntry(object):
             last column + 1
         typespecifier : str
             'I': int, 'F': float, 'E': float, 'A': stripped string
-
         The start/stop arguments follow standard Python convention in that
         they are 0-based and that the *stop* argument is not included.
         """
@@ -1113,40 +979,30 @@ class FixedcolumnEntry(object):
 
 class FORTRANReader(object):
     """FORTRANReader provides a method to parse FORTRAN formatted lines in a file.
-
     The contents of lines in a file can be parsed according to FORTRAN format
     edit descriptors (see `Fortran Formats`_ for the syntax).
-
     Only simple one-character specifiers supported here: *I F E A X* (see
     :data:`FORTRAN_format_regex`).
-
     Strings are stripped of leading and trailing white space.
-
     .. _`Fortran Formats`: http://www.webcitation.org/5xbaWMV2x
     .. _`Fortran Formats (URL)`:
        http://www.cs.mtu.edu/~shene/COURSES/cs201/NOTES/chap05/format.html
-
     """
 
     def __init__(self, fmt):
         """Set up the reader with the FORTRAN format string.
-
         The string `fmt` should look like '2I10,2X,A8,2X,A8,3F20.10,2X,A8,2X,A8,F20.10'.
-
         Parameters
         ----------
         fmt : str
            FORTRAN format edit descriptor for a line as described in `Fortran
            Formats`_
-
         Example
         -------
         Parsing of a standard CRD file::
-
            atomformat = FORTRANReader('2I10,2X,A8,2X,A8,3F20.10,2X,A8,2X,A8,F20.10')
            for line in open('coordinates.crd'):
                serial,TotRes,resName,name,x,y,z,chainID,resSeq,tempFactor = atomformat.read(line)
-
         """
         self.fmt = fmt.split(',')
         descriptors = [self.parse_FORTRAN_format(descriptor) for descriptor in self.fmt]
@@ -1163,23 +1019,18 @@ class FORTRANReader(object):
 
     def read(self, line):
         """Parse `line` according to the format string and return list of values.
-
         Values are converted to Python types according to the format specifier.
-
         Parameters
         ----------
         line : str
-
         Returns
         -------
         list
             list of entries with appropriate types
-
         Raises
         ------
         ValueError
             Any of the conversions cannot be made (e.g. space for an int)
-
         See Also
         --------
         :meth:`FORTRANReader.number_of_matches`
@@ -1200,28 +1051,22 @@ class FORTRANReader(object):
 
     def parse_FORTRAN_format(self, edit_descriptor):
         """Parse the descriptor.
-
-
         Parameters
         ----------
         edit_descriptor : str
             FORTRAN format edit descriptor
-
         Returns
         -------
         dict
             dict with totallength (in chars), repeat, length, format, decimals
-
         Raises
         ------
         ValueError
             The `edit_descriptor` is not recognized and cannot be parsed
-
         Note
         ----
         Specifiers: *L ES EN T TL TR / r S SP SS BN BZ* are *not* supported,
         and neither are the scientific notation *Ew.dEe* forms.
-
         """
 
         m = _FORTRAN_format_pattern.match(edit_descriptor.upper())
@@ -1257,15 +1102,12 @@ class FORTRANReader(object):
 
 def fixedwidth_bins(delta, xmin, xmax):
     """Return bins of width `delta` that cover `xmin`, `xmax` (or a larger range).
-
     The bin parameters are computed such that the bin size `delta` is
     guaranteed. In order to achieve this, the range `[xmin, xmax]` can be
     increased.
-
     Bins can be calculated for 1D data (then all parameters are simple floats)
     or nD data (then parameters are supplied as arrays, with each entry
     correpsonding to one dimension).
-
     Parameters
     ----------
     delta : float or array_like
@@ -1274,20 +1116,16 @@ def fixedwidth_bins(delta, xmin, xmax):
         lower bound (left boundary of first bin)
     xmax : float or array_like
         upper bound (right boundary of last bin)
-
     Returns
     -------
     dict
         The dict contains 'Nbins', 'delta', 'min', and 'max'; these are either
         floats or arrays, depending on the input.
-
     Example
     -------
     Use with :func:`numpy.histogram`::
-
        B = fixedwidth_bins(delta, xmin, xmax)
        h, e = np.histogram(data, bins=B['Nbins'], range=(B['min'], B['max']))
-
     """
     if not np.all(xmin < xmax):
         raise ValueError('Boundaries are not sane: should be xmin < xmax.')
@@ -1301,7 +1139,6 @@ def fixedwidth_bins(delta, xmin, xmax):
 
 def get_weights(atoms, weights):
     """Check that a `weights` argument is compatible with `atoms`.
-
     Parameters
     ----------
     atoms : AtomGroup or array_like
@@ -1313,13 +1150,11 @@ def get_weights(atoms, weights):
         use ``atoms.masses``. ``None`` indicates equal weights for all atoms.
         Using an ``array_like`` assigns a custom weight to each element of
         `atoms`.
-
     Returns
     -------
     weights : array_like or None
          If "mass" was selected, ``atoms.masses`` is returned, otherwise the
          value of `weights` (which can be ``None``).
-
     Raises
     ------
     TypeError
@@ -1329,7 +1164,6 @@ def get_weights(atoms, weights):
         If `weights` is not a 1D array with the same length as
         `atoms`, then the exception is raised.  :exc:`TypeError` is
         also raised if ``atoms.masses`` is not defined.
-
     """
     if not iterable(weights) and weights == "mass":
         try:
@@ -1390,22 +1224,18 @@ inverse_aa_codes.update(alternative_inverse_aa_codes)
 
 def convert_aa_code(x):
     """Converts between 3-letter and 1-letter amino acid codes.
-
     Parameters
     ----------
     x : str
         1-letter or 3-letter amino acid code
-
     Returns
     -------
     str
         3-letter or 1-letter amino acid code
-
     Raises
     ------
     ValueError
         No conversion can be made; the amino acid code is not defined.
-
     Note
     ----
     Data are defined in :data:`amino_acid_codes` and :data:`inverse_aa_codes`.
@@ -1443,7 +1273,6 @@ RESIDUE = re.compile(r"""
 # from GromacsWrapper cbook.IndexBuilder
 def parse_residue(residue):
     """Process residue string.
-
     Parameters
     ----------
     residue: str
@@ -1452,13 +1281,11 @@ def parse_residue(residue):
         optionally an atom identifier, which must be separate
         from the residue with a colon (":"). White space is
         allowed in between.
-
     Returns
     -------
     tuple
         `(3-letter aa string, resid, atomname)`; known 1-letter
         aa codes are converted to 3-letter codes
-
     Examples
     --------
      - "LYS300:HZ1" --> ("LYS", 300, "HZ1")
@@ -1466,7 +1293,6 @@ def parse_residue(residue):
      - "K300" --> ("LYS", 300, None)
      - "4GB300:H6O" --> ("4GB", 300, "H6O")
      - "4GB300" --> ("4GB", 300, None)
-
     """
 
     # XXX: use _translate_residue() ....
@@ -1485,7 +1311,6 @@ def parse_residue(residue):
 
 def conv_float(s):
     """Convert an object `s` to float if possible.
-
     Function to be passed into :func:`map` or a list comprehension. If
     the argument can be interpreted as a float it is converted,
     otherwise the original object is passed back.
@@ -1498,18 +1323,14 @@ def conv_float(s):
 
 def cached(key):
     """Cache a property within a class.
-
     Requires the Class to have a cache dict called ``_cache``.
-
     Example
     -------
     How to add a cache for a variable to a class by using the `@cached`
     decorator::
-
        class A(object):
            def__init__(self):
                self._cache = dict()
-
            @property
            @cached('keyname')
            def size(self):
@@ -1517,10 +1338,7 @@ def cached(key):
                # After this code has been ran once, the result is stored in
                # _cache with the key: 'keyname'
                size = 10.0
-
-
     .. versionadded:: 0.9.0
-
     """
 
     def cached_lookup(func):
@@ -1539,7 +1357,6 @@ def cached(key):
 
 def unique_rows(arr, return_index=False):
     """Return the unique rows of an array.
-
     Arguments
     ---------
     arr : numpy.ndarray
@@ -1547,7 +1364,6 @@ def unique_rows(arr, return_index=False):
     return_index : bool, optional
       If ``True``, returns indices of array that formed answer (see
       :func:`numpy.unique`)
-
     Returns
     -------
     unique_rows : numpy.ndarray
@@ -1555,20 +1371,16 @@ def unique_rows(arr, return_index=False):
     r_idx : numpy.ndarray (optional)
           Array containing the corresponding row indices (if `return_index`
           is ``True``).
-
     Examples
     --------
     Remove dupicate rows from an array:
-
     >>> a = np.array([[0, 1], [1, 2], [1, 2], [0, 1], [2, 3]])
     >>> b = unique_rows(a)
     >>> b
     array([[0, 1], [1, 2], [2, 3]])
-
     See Also
     --------
     numpy.unique
-
     """
     # From here, but adapted to handle any size rows
     # https://mail.scipy.org/pipermail/scipy-user/2011-December/031200.html
@@ -1595,7 +1407,6 @@ def unique_rows(arr, return_index=False):
 
 def blocks_of(a, n, m):
     """Extract a view of ``(n, m)`` blocks along the diagonal of the array `a`.
-
     Parameters
     ----------
     a : numpy.ndarray
@@ -1604,20 +1415,17 @@ def blocks_of(a, n, m):
         Size of block in first dimension.
     m : int
         Size of block in second dimension.
-
     Returns
     -------
     view : numpy.ndarray
         A view of the original array with shape ``(nblocks, n, m)``, where
         ``nblocks`` is the number of times the miniblocks of shape ``(n, m)``
         fit in the original.
-
     Raises
     ------
     ValueError
         If the supplied `n` and `m` don't divide `a` into an integer number
         of blocks or if `a` is not C contiguous.
-
     Examples
     --------
     >>> arr = np.arange(16).reshape(4, 4)
@@ -1628,20 +1436,14 @@ def blocks_of(a, n, m):
            [100, 100,   6,   7],
            [  8,   9, 100, 100],
            [ 12,  13, 100, 100]])
-
     Notes
     -----
     `n`, `m` must divide `a` into an identical integer number of blocks. Please
     note that if the block size is larger than the input array, this number will
     be zero, resulting in an empty view!
-
     Uses strides and therefore requires that the array is C contiguous.
-
     Returns a view, so editing this modifies the original array.
-
-
     .. versionadded:: 0.12.0
-
     """
     # based on:
     # http://stackoverflow.com/a/10862636
@@ -1667,15 +1469,12 @@ def blocks_of(a, n, m):
 def group_same_or_consecutive_integers(arr):
     """Split an array of integers into a list of same or consecutive
     sequences.
-
     Parameters
     ----------
     arr: :class:`numpy.ndarray`
-
     Returns
     -------
     list of :class:`numpy.ndarray`
-
     Examples
     >>> arr = np.array([ 2,  3,  4,  7,  8,  9, 10, 11, 15, 16])
     >>> group_same_or_consecutive_integers(arr)
@@ -1716,19 +1515,16 @@ class Namespace(dict):
 
 def ltruncate_int(value, ndigits):
     """Truncate an integer, retaining least significant digits
-
     Parameters
     ----------
     value : int
       value to truncate
     ndigits : int
       number of digits to keep
-
     Returns
     -------
     truncated : int
       only the `ndigits` least significant digits from `value`
-
     Examples
     --------
     >>> ltruncate_int(123, 2)
@@ -1741,20 +1537,16 @@ def ltruncate_int(value, ndigits):
 
 def flatten_dict(d, parent_key=tuple()):
     """Flatten a nested dict `d` into a shallow dict with tuples as keys.
-
     Parameters
     ----------
     d : dict
-
     Returns
     -------
     dict
-
     Note
     -----
     Based on https://stackoverflow.com/a/6027615/
     by user https://stackoverflow.com/users/1897/imran
-
     .. versionadded:: 0.18.0
     """
 
@@ -1773,13 +1565,10 @@ def flatten_dict(d, parent_key=tuple()):
 
 def static_variables(**kwargs):
     """Decorator equipping functions or methods with static variables.
-
     Static variables are declared and initialized by supplying keyword arguments
     and initial values to the decorator.
-
     Example
     -------
-
     >>> @static_variables(msg='foo calls', calls=0)
     ... def foo():
     ...     foo.calls += 1
@@ -1789,11 +1578,8 @@ def static_variables(**kwargs):
     foo calls: 1
     >>> foo()
     foo calls: 2
-
-
     .. note:: Based on https://stackoverflow.com/a/279586
         by `Claudiu <https://stackoverflow.com/users/15055/claudiu>`_
-
     .. versionadded:: 0.19.0
     """
     def static_decorator(func):
@@ -1820,10 +1606,8 @@ def static_variables(**kwargs):
 def warn_if_not_unique(groupmethod):
     """Decorator triggering a :class:`~MDAnalysis.exceptions.DuplicateWarning`
     if the underlying group is not unique.
-
     Assures that during execution of the decorated method only the first of
     potentially multiple warnings concerning the uniqueness of groups is shown.
-
     Raises
     ------
     :class:`~MDAnalysis.exceptions.DuplicateWarning`
@@ -1831,8 +1615,6 @@ def warn_if_not_unique(groupmethod):
         :class:`~MDAnalysis.core.groups.ResidueGroup`, or
         :class:`~MDAnalysis.core.groups.SegmentGroup` of which the decorated
         method is a member contains duplicates.
-
-
     .. versionadded:: 0.19.0
     """
     @wraps(groupmethod)
@@ -1874,7 +1656,6 @@ def warn_if_not_unique(groupmethod):
 
 def check_coords(*coord_names, **options):
     """Decorator for automated coordinate array checking.
-
     This decorator is intended for use especially in
     :mod:`MDAnalysis.lib.distances`.
     It takes an arbitrary number of positional arguments which must correspond
@@ -1885,9 +1666,7 @@ def check_coords(*coord_names, **options):
     instead of an array of coordinates (or angles). This can be used to enable
     computations of single observables using functions originally designed to
     accept only 2-d coordinate arrays.
-
     The checks performed on each individual coordinate array are:
-
     * Check that coordinate arrays are of type :class:`numpy.ndarray`.
     * Check that coordinate arrays have a shape of ``(n, 3)`` (or ``(3,)`` if
       single coordinates are allowed; see keyword argument `allow_single`).
@@ -1897,7 +1676,6 @@ def check_coords(*coord_names, **options):
       replaced by a C-contiguous copy.
     * Optional check for equal length of all coordinate arrays; see optional
       keyword argument `check_lengths_match`.
-
     Parameters
     ----------
     *coord_names : tuple
@@ -1919,27 +1697,21 @@ def check_coords(*coord_names, **options):
         * **check_lengths_match** (:class:`bool`, optional) -- If ``True``, a
           :class:`ValueError` is raised if not all coordinate arrays contain the
           same number of coordinates. Default: ``True``
-
     Raises
     ------
     ValueError
         If the decorator is used without positional arguments (for development
         purposes only).
-
         If any of the positional arguments supplied to the decorator doesn't
         correspond to a name of any of the decorated function's positional
         arguments.
-
         If any of the coordinate arrays has a wrong shape.
     TypeError
         If any of the coordinate arrays is not a :class:`numpy.ndarray`.
-
         If the dtype of any of the coordinate arrays is not convertible to
           ``numpy.float32``.
-
     Example
     -------
-
     >>> @check_coords('coords1', 'coords2')
     ... def coordsum(coords1, coords2):
     ...     assert coords1.dtype == np.float32
@@ -1957,8 +1729,6 @@ def check_coords(*coord_names, **options):
     >>> # automatic shape checking:
     >>> coordsum(np.zeros(3), np.ones(6))
     ValueError: coordsum(): coords2.shape must be (3,) or (n, 3), got (6,).
-
-
     .. versionadded:: 0.19.0
     """
     enforce_copy = options.get('enforce_copy', True)
@@ -2083,14 +1853,10 @@ def _set_function_name(func, name):
 class _Deprecate(object):
     """
     Decorator class to deprecate old functions.
-
     Refer to `deprecate` for details.
-
     See Also
     --------
     deprecate
-
-
     .. versionadded:: 0.19.0
     """
 
@@ -2108,7 +1874,6 @@ class _Deprecate(object):
     def __call__(self, func, *args, **kwargs):
         """
         Decorator call.  Refer to ``decorate``.
-
         """
         old_name = self.old_name
         new_name = self.new_name
@@ -2180,14 +1945,11 @@ def deprecate(*args, **kwargs):
     r"""Issues a DeprecationWarning, adds warning to `old_name`'s
     docstring, rebinds ``old_name.__name__`` and returns the new
     function object.
-
     This function may also be used as a decorator.
-
     It adds a restructured text ``.. deprecated:: release`` block with
     the sphinx deprecated role to the end of the docs. The `message`
     is added under the deprecation block and contains the `release` in
     which the function was deprecated.
-
     Parameters
     ----------
     func : function
@@ -2209,55 +1971,39 @@ def deprecate(*args, **kwargs):
     message : str, optional
         Additional explanation of the deprecation.  Displayed in the
         docstring after the warning.
-
     Returns
     -------
     old_func : function
         The deprecated function.
-
     Examples
     --------
     When :func:`deprecate` is used as a function as in the following
     example,
-
     .. code-block:: python
-
        oldfunc = deprecate(func, release="0.19.0", remove="1.0",
                            message="Do it yourself instead.")
-
     then ``oldfunc`` will return a value after printing
     :exc:`DeprecationWarning`; ``func`` is still available as it was
     before.
-
     When used as a decorator, ``func`` will be changed and issue the
     warning and contain the deprecation note in the do string.
-
     .. code-block:: python
-
        @deprecate(release="0.19.0", remove="1.0",
                   message="Do it yourself instead.")
        def func():
            \"\"\"Just pass\"\"\"
            pass
-
     The resulting doc string (``help(func)``) will look like:
-
     .. code-block:: reST
-
        `func` is deprecated!
-
        Just pass.
-
        .. deprecated:: 0.19.0
           Do it yourself instead.
           `func` will be removed in 1.0.
-
     (It is possible but confusing to change the name of ``func`` with
     the decorator so it is not recommended to use the `new_func`
     keyword argument with the decorator.)
-
     .. versionadded:: 0.19.0
-
     """
     # Deprecate may be run as a function or as a decorator
     # If run as a function, we initialise the decorator class
@@ -2275,23 +2021,18 @@ def deprecate(*args, **kwargs):
 
 def dedent_docstring(text):
     """Dedent typical python doc string.
-
     Parameters
     ----------
     text : str
         string, typically something like ``func.__doc__``.
-
     Returns
     -------
     str
         string with the leading common whitespace removed from each
         line
-
     See Also
     --------
     textwrap.dedent
-
-
     .. versionadded:: 0.19.0
     """
     lines = text.splitlines()
@@ -2305,7 +2046,6 @@ def dedent_docstring(text):
 def check_box(box):
     """Take a box input and deduce what type of system it represents based on
     the shape of the array and whether all angles are 90 degrees.
-
     Parameters
     ----------
     box : array_like
@@ -2313,7 +2053,6 @@ def check_box(box):
         triclinic and must be provided in the same format as returned by
         :attr:`MDAnalysis.coordinates.base.Timestep.dimensions`:
         ``[lx, ly, lz, alpha, beta, gamma]``.
-
     Returns
     -------
     boxtype : {``'ortho'``, ``'tri_vecs'``}
@@ -2326,18 +2065,14 @@ def check_box(box):
             ``(3, 3)`` containing the triclinic box vectors in a lower triangular
             matrix as returned by
             :meth:`~MDAnalysis.lib.mdamath.triclinic_vectors`.
-
     Raises
     ------
     ValueError
         If `box` is not of the form ``[lx, ly, lz, alpha, beta, gamma]``
         or contains data that is not convertible to ``numpy.float32``.
-
     See Also
     --------
     MDAnalysis.lib.mdamath.triclinic_vectors
-
-
     .. versionchanged: 0.19.0
        * Enforced correspondence of `box` with specified format.
        * Added automatic conversion of input to :class:`numpy.ndarray` with
@@ -2354,3 +2089,34 @@ def check_box(box):
     if np.all(box[3:] == 90.):
         return 'ortho', box[:3]
     return 'tri_vecs', triclinic_vectors(box)
+
+
+class timeit(object):
+    """measure time spend in context
+    :class:`timeit` is a context manager (to be used with the :keyword:`with`
+    statement) that records the execution time for the enclosed context block
+    in :attr:`elapsed`.
+    Attributes
+    ----------
+    elapsed : float
+        Time in seconds that elapsed between entering
+        and exiting the context.
+    Example
+    -------
+    Use as a context manager::
+       with timeit() as total:
+          # code to be timed
+       print(total.elapsed, "seconds")
+    See Also
+    --------
+    :func:`time.time`
+    """
+    def __enter__(self):
+        self._start_time = time.time()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        end_time = time.time()
+        self.elapsed = end_time - self._start_time
+        # always propagate exceptions forward
+        return False
