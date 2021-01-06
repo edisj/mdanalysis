@@ -602,11 +602,11 @@ class Universe(object):
             dimensions = (np.zeros((n_frames, 6), dtype=np.float32)
                           if has_dims else None)
 
-            np.copyto(coordinates, group['position/value'][()])
+            np.copyto(coordinates, group['position/value'][start:stop])
             if has_vels:
-                np.copyto(velocities, group['velocity/value'][()])
+                np.copyto(velocities, group['velocity/value'][start:stop])
             if has_fors:
-                np.copyto(forces, group['force/value'][()])
+                np.copyto(forces, group['force/value'][start:stop])
             #if has_dims:
                 #np.copyto(dimensions, group['box/edges/value'][()])
 
