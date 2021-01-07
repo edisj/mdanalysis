@@ -590,23 +590,19 @@ class Universe(object):
                 *self.trajectory.check_slice_indices(start, stop, step)
             ))
             n_atoms = len(self.atoms)
-            coordinates = np.zeros((n_frames, n_atoms, 3), dtype=np.float32)
             group = self.trajectory._particle_group
             ts = self.trajectory.ts
             has_vels = ts.has_velocities
             has_fors = ts.has_forces
             has_dims = ts.dimensions is not None
 
-            velocities = np.zeros_like(coordinates) if has_vels else None
-            forces = np.zeros_like(coordinates) if has_fors else None
             dimensions = (np.zeros((n_frames, 6), dtype=np.float32)
                           if has_dims else None)
 
-            np.copyto(coordinates, group['position/value'][start:stop])
-            if has_vels:
-                np.copyto(velocities, group['velocity/value'][start:stop])
-            if has_fors:
-                np.copyto(forces, group['force/value'][start:stop])
+            # Does not copy array, straight assignment instead to reduce memory usage
+            coordinates = group['position/value'][start:stop]
+            velocities = group['velocity/value'][start:stop] if has_vels else None
+            forces =  group['force/value'][start:stop] if has_fors else None
             #if has_dims:
                 #np.copyto(dimensions, group['box/edges/value'][()])
 
