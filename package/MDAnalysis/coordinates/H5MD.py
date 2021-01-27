@@ -318,6 +318,7 @@ class Timestep(base.Timestep):
                                       order=self.order)
                 self._pos.mask = self._mask
                 self._pos.set_fill_value(np.NaN)
+                self._pos.harden_mask()
             self._has_positions = True
         elif not val:
             # Unsetting val won't delete the numpy array

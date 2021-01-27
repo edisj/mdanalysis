@@ -55,6 +55,7 @@ Functions
 """
 import errno
 import numpy as np
+import numpy.ma as ma
 import logging
 import copy
 import warnings
@@ -305,7 +306,7 @@ class Universe(object):
     def __init__(self, topology=None, *coordinates, all_coordinates=False,
                  format=None, topology_format=None, transformations=None,
                  guess_bonds=False, vdwradii=None, in_memory=False,
-                 in_memory_step=1, **kwargs):
+                 in_memory_step=1, sub=None, **kwargs):
 
         self._trajectory = None  # managed attribute holding Reader
         self._cache = {}
@@ -313,6 +314,7 @@ class Universe(object):
         self.residues = None
         self.segments = None
         self.filename = None
+        self._sub = sub
 
         self._kwargs = {
             'transformations': transformations,
@@ -560,7 +562,7 @@ class Universe(object):
         return self
 
     def transfer_to_memory(self, start=None, stop=None, step=None,
-                           verbose=False):
+                           verbose=False, sub=None):
         """Transfer the trajectory to in memory representation.
 
         Replaces the current trajectory reader object with one of type
@@ -590,25 +592,29 @@ class Universe(object):
                 *self.trajectory.check_slice_indices(start, stop, step)
             ))
             n_atoms = len(self.atoms)
-            coordinates = np.zeros((n_frames, n_atoms, 3), dtype=np.float32)
             group = self.trajectory._particle_group
             ts = self.trajectory.ts
             has_vels = ts.has_velocities
             has_fors = ts.has_forces
             has_dims = ts.dimensions is not None
 
-            velocities = np.zeros_like(coordinates) if has_vels else None
-            forces = np.zeros_like(coordinates) if has_fors else None
             dimensions = (np.zeros((n_frames, 6), dtype=np.float32)
                           if has_dims else None)
 
-            np.copyto(coordinates, group['position/value'][()])
-            if has_vels:
-                np.copyto(velocities, group['velocity/value'][()])
-            if has_fors:
-                np.copyto(forces, group['force/value'][()])
-            #if has_dims:
-                #np.copyto(dimensions, group['box/edges/value'][()])
+            # Does not copy array, straight assignment instead to reduce memory usage
+            if sub is not None:
+                _mask = np.ones((n_frames,n_atoms,3), dtype=bool)
+                _mask[:,sub] = False
+                coordinates = ma.masked_array(group['position/value'][start:stop], mask=_mask)
+                velocities = ma.masked_array(group['velocity/value'][start:stop], mask=_mask) if has_vels else None
+                forces =  ma.masked_array(group['force/value'][start:stop], mask=_mask) if has_fors else None
+            else:
+                coordinates = group['position/value'][start:stop]
+                velocities = group['velocity/value'][start:stop] if has_vels else None
+                forces =  group['force/value'][start:stop] if has_fors else None
+                #if has_dims:
+                    #np.copyto(dimensions, group['box/edges/value'][()])
+
 
             # Overwrite trajectory in universe with an MemoryReader
             # object, to provide fast access and allow coordinates
@@ -623,7 +629,7 @@ class Universe(object):
                 velocities=velocities,
                 forces=forces,
             )
-            
+
         if not isinstance(self.trajectory, MemoryReader):
             n_frames = len(range(
                 *self.trajectory.check_slice_indices(start, stop, step)
