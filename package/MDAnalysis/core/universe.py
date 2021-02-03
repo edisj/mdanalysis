@@ -603,11 +603,21 @@ class Universe(object):
 
             # Does not copy array, straight assignment instead to reduce memory usage
             if sub is not None:
-                _mask = np.ones((n_frames,n_atoms,3), dtype=bool)
-                _mask[:,sub] = False
-                coordinates = ma.masked_array(group['position/value'][start:stop], mask=_mask)
-                velocities = ma.masked_array(group['velocity/value'][start:stop], mask=_mask) if has_vels else None
-                forces =  ma.masked_array(group['force/value'][start:stop], mask=_mask) if has_fors else None
+                mask = np.ones((n_frames,n_atoms,3), dtype=bool)
+                mask[:, sub] = False
+
+                coordinates = ma.zeros((n_frames, n_atoms, 3), dtype=np.float32)
+                velocities = np.zeros_like(coordinates) if has_vels else None
+                forces = np.zeros_like(coordinates) if has_fors else None
+
+                coordinates.mask = mask
+                coordinates[:, sub] = group['position/value'][start:stop, sub]
+                if has_vels:
+                    velocities.mask = mask
+                    velocities[:, sub] = group['velocity/value'][start:stop, sub]
+                if has_fors:
+                    forces.mask = mask
+                    forces[:, sub] = group['force/value'][start:stop, sub]
             else:
                 coordinates = group['position/value'][start:stop]
                 velocities = group['velocity/value'][start:stop] if has_vels else None
