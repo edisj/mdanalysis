@@ -611,17 +611,21 @@ class Universe(object):
                 forces = np.zeros_like(coordinates) if has_fors else None
 
                 coordinates.mask = mask
-                coordinates[:, sub] = group['position/value'][start:stop, sub]
+                group['position/value'].read_direct(coordinates, source_sel=np.s_[start:stop, sub], dest_sel=np.s_[:, sub])
                 if has_vels:
                     velocities.mask = mask
-                    velocities[:, sub] = group['velocity/value'][start:stop, sub]
+                    group['velocity/value'].read_direct(velocities, source_sel=np.s_[start:stop, sub], dest_sel=np.s_[:, sub])
                 if has_fors:
                     forces.mask = mask
-                    forces[:, sub] = group['force/value'][start:stop, sub]
+                    group['force/value'].read_direct(forces, source_sel=np.s_[start:stop, sub], dest_sel=np.s_[:, sub])
             else:
-                coordinates = group['position/value'][start:stop]
-                velocities = group['velocity/value'][start:stop] if has_vels else None
-                forces =  group['force/value'][start:stop] if has_fors else None
+                coordinates = np.zeros((n_frames, n_atoms, 3), dtype=np.float32)
+                velocities = np.zeros_like(coordinates) if has_vels else None
+                forces = np.zeros_like(coordinates) if has_fors else None
+
+                group['position/value'].read_direct(coordinates, source_sel=np.s_[start:stop])
+                group['velocity/value'].read_direct(velocities, source_sel=np.s_[start:stop]) if has_vels else None
+                group['force/value'].read_direct(forces, source_sel=np.s_[start:stop]) if has_fors else None
                 #if has_dims:
                     #np.copyto(dimensions, group['box/edges/value'][()])
 
