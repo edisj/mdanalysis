@@ -867,6 +867,7 @@ class H5MDWriter(base.WriterBase):
     def __init__(self,
                  filename,
                  n_atoms,
+                 n_frames,
                  driver=None,
                  comm=None,
                  convert_units=True,
@@ -916,6 +917,7 @@ class H5MDWriter(base.WriterBase):
         self._driver = driver
         self._comm = comm
         self.n_atoms = n_atoms
+        self.n_frames = n_frames
         self.units = None
         self.chunks = (1, n_atoms, 3) if chunks is None else chunks
         self.compression = compression
@@ -1028,18 +1030,18 @@ class H5MDWriter(base.WriterBase):
             trajectory['box'].require_group('edges')
             trajectory.require_dataset(
                 'box/edges/value',
-                shape=(0, 3, 3),
-                maxshape=(None, 3, 3),
+                shape=(self.n_frames, 3, 3),
+                maxshape=(self.n_frames, 3, 3),
                 dtype=np.float32)
             trajectory.require_dataset(
                 'box/edges/step',
-                shape=(0,),
-                maxshape=(None,),
+                shape=(self.n_frames,),
+                maxshape=(self.n_frames,),
                 dtype=np.int32)
             trajectory.require_dataset(
                 'box/edges/time',
-                shape=(0,),
-                maxshape=(None,),
+                shape=(self.n_frames,),
+                maxshape=(self.n_frames,),
                 dtype=np.float32)
 
             if self.units is not None:
@@ -1086,21 +1088,20 @@ class H5MDWriter(base.WriterBase):
 
         trajectory.require_dataset(
             f'{group}/value',
-           shape=(0, self.n_atoms, 3),
-           maxshape=(None, self.n_atoms, 3),
+           shape=(self.n_frames, self.n_atoms, 3),
            dtype=np.float32,
            chunks=self.chunks,
            compression=self.compression,
            compression_opts=self.compression_opts)
         trajectory.require_dataset(
             f'{group}/step',
-            shape=(0,),
-            maxshape=(None,),
+            shape=(self.n_frames,),
+            maxshape=(self.n_frames,),
             dtype=np.int32)
         trajectory.require_dataset(
             f'{group}/time',
-            shape=(0,),
-            maxshape=(None,),
+            shape=(self.n_frames,),
+            maxshape=(self.n_frames,),
             dtype=np.float32)
 
         if self.units is not None:
@@ -1117,18 +1118,18 @@ class H5MDWriter(base.WriterBase):
 
         obsv.require_dataset(
             f'{group}/value',
-            shape=(0,) + data.shape,
-            maxshape=(None,) + data.shape,
+            shape=(self.n_frames,) + data.shape,
+            maxshape=(self.n_frames,) + data.shape,
             dtype=data.dtype)
         obsv.require_dataset(
             f'{group}/step',
-            shape=(0,),
-            maxshape=(None,),
+            shape=(self.n_frames,),
+            maxshape=(self.n_frames,),
             dtype=np.int32)
         obsv.require_dataset(
             f'{group}/time',
-            shape=(0,),
-            maxshape=(None,),
+            shape=(self.n_frames,),
+            maxshape=(self.n_frames,),
             dtype=np.float32)
 
     def _set_attr_unit(self, dset, unit):
@@ -1170,12 +1171,7 @@ class H5MDWriter(base.WriterBase):
         """Helper function that extends first dimension of the dataset by +1
         and writes to the new slot."""
 
-        # extend dataset
-        dset['value'].resize(dset['value'].shape[0]+1, axis=0)
-        dset['step'].resize(dset['step'].shape[0]+1, axis=0)
-        dset['time'].resize(dset['time'].shape[0]+1, axis=0)
-
         # write to new slot
-        dset['value'][-1] = data
-        dset['step'][-1] = ts.data['step']
-        dset['time'][-1] = ts.data['time']
+        dset['value'][ts.frame] = data
+        dset['step'][ts.frame] = ts.data['step']
+        dset['time'][ts.frame] = ts.data['time']
