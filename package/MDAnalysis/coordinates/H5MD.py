@@ -1001,7 +1001,7 @@ class H5MDWriter(base.WriterBase):
             self.traj['box'].require_group('edges')
             self._edges = self.traj['box/edges'].require_dataset('value',
                                                    shape=(self.n_frames, 3, 3),
-                                                   maxshape=(self.n_framesself.n_frames, 3, 3),
+                                                   maxshape=(self.n_frames, 3, 3),
                                                    dtype=np.float32)
             self._step = self.traj.require_dataset('box/edges/step',
                                                    shape=(self.n_frames,),
