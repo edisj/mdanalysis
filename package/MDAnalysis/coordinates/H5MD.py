@@ -862,6 +862,7 @@ class H5MDWriter(base.WriterBase):
         self.compression_opts = compression_opts
         self.convert_units = convert_units
         self.h5md_file = None
+        self.n_frames = n_frames
 
         # check which datasets are to be written
         self.has_positions = kwargs.get('positions', False)
@@ -999,16 +1000,16 @@ class H5MDWriter(base.WriterBase):
             self.traj['box'].attrs['boundary'] = 3*['periodic']
             self.traj['box'].require_group('edges')
             self._edges = self.traj['box/edges'].require_dataset('value',
-                                                   shape=(0, 3, 3),
-                                                   maxshape=(None, 3, 3),
+                                                   shape=(self.n_frames, 3, 3),
+                                                   maxshape=(self.n_framesself.n_frames, 3, 3),
                                                    dtype=np.float32)
             self._step = self.traj.require_dataset('box/edges/step',
-                                                   shape=(0,),
-                                                   maxshape=(None,),
+                                                   shape=(self.n_frames,),
+                                                   maxshape=(self.n_frames,),
                                                    dtype=np.int32)
             self._time = self.traj.require_dataset('box/edges/time',
-                                                   shape=(0,),
-                                                   maxshape=(None,),
+                                                   shape=(self.n_frames,),
+                                                   maxshape=(self.n_frames,),
                                                    dtype=np.float32)
             if self.units is not None:
                 self._set_attr_unit(self._edges, 'length')
@@ -1058,12 +1059,12 @@ class H5MDWriter(base.WriterBase):
         for group, value in _has.items():
             if value:
                 self._step = self.traj.require_dataset(f'{group}/step',
-                                                       shape=(0,),
-                                                       maxshape=(None,),
+                                                       shape=(self.n_frames,),
+                                                       maxshape=(self.n_frames,),
                                                        dtype=np.int32)
                 self._time = self.traj.require_dataset(f'{group}/time',
-                                                       shape=(0,),
-                                                       maxshape=(None,),
+                                                       shape=(self.n_frames,),
+                                                       maxshape=(self.n_frames,),
                                                        dtype=np.float32)
                 self._set_attr_unit(self._time, 'time')
                 break
@@ -1071,12 +1072,12 @@ class H5MDWriter(base.WriterBase):
             if self.data_keys:
                 for key in self.data_keys:
                     self._step = self.obsv.require_dataset(f'{key}/step',
-                                                           shape=(0,),
-                                                           maxshape=(None,),
+                                                           shape=(self.n_frames,),
+                                                           maxshape=(self.n_frames,),
                                                            dtype=np.int32)
                     self._time = self.obsv.require_dataset(f'{key}/time',
-                                                           shape=(0,),
-                                                           maxshape=(None,),
+                                                           shape=(self.n_frames,),
+                                                           maxshape=(self.n_frames,),
                                                            dtype=np.float32)
                     self._set_attr_unit(self._time, 'time')
                     break
@@ -1086,8 +1087,8 @@ class H5MDWriter(base.WriterBase):
 
         self.traj.require_group(group)
         self.traj.require_dataset(f'{group}/value',
-                                  shape=(0, self.n_atoms, 3),
-                                  maxshape=(None, self.n_atoms, 3),
+                                  shape=(self.n_frames, self.n_atoms, 3),
+                                  maxshape=(self.n_frames, self.n_atoms, 3),
                                   dtype=np.float32,
                                   chunks=self.chunks,
                                   compression=self.compression,
@@ -1103,8 +1104,8 @@ class H5MDWriter(base.WriterBase):
         # guarantee ints and floats have a shape ()
         data = np.asarray(data)
         self.obsv.require_dataset(f'{group}/value',
-                                  shape=(0,) + data.shape,
-                                  maxshape=(None,) + data.shape,
+                                  shape=(self.n_frames,) + data.shape,
+                                  maxshape=(self.n_frames,) + data.shape,
                                   dtype=data.dtype)
         self.obsv[f'{group}/step'] = self._step
         self.obsv[f'{group}/time'] = self._time
@@ -1131,47 +1132,39 @@ class H5MDWriter(base.WriterBase):
 
         """
 
-        self._step.resize(self._step.shape[0]+1, axis=0)
-        self._step[-1] = ts.data['step']
-        self._time.resize(self._time.shape[0]+1, axis=0)
+        self._step[ts.frame] = ts.data['step']
         if self.convert_units:
-            self._time[-1] = self.convert_time_to_native(ts.time)
+            self._time[ts.frame] = self.convert_time_to_native(ts.time)
         else:
-            self._time[-1] = ts.time
+            self._time[ts.frame] = ts.time
 
         if 'edges' in self.traj['box']:
-            self._edges.resize(self._edges.shape[0]+1, axis=0)
             if self.convert_units:
-                self._edges[-1] = self.convert_pos_to_native(ts.triclinic_dimensions[:3])
+                self._edges[ts.frame] = self.convert_pos_to_native(ts.triclinic_dimensions[:3])
             else:
-                self._edges[-1] = ts.triclinic_dimensions
+                self._edges[ts.frame] = ts.triclinic_dimensions
 
         if self.has_positions:
-            self._pos.resize(self._pos.shape[0]+1, axis=0)
             if self.convert_units:
-                self._pos[-1] = self.convert_pos_to_native(ts.positions)
+                self._pos[ts.frame] = self.convert_pos_to_native(ts.positions)
             else:
-                self._pos[-1] = ts.positions
+                self._pos[ts.frame] = ts.positions
 
         if self.has_velocities:
-            self._vel.resize(self._vel.shape[0]+1, axis=0)
             if self.convert_units:
-                self._vel[-1] = self.convert_velocities_to_native(ts.velocities)
+                self._vel[ts.frame] = self.convert_velocities_to_native(ts.velocities)
             else:
-                self._vel[-1] = ts.velocities
+                self._vel[ts.frame] = ts.velocities
 
         if self.has_forces:
-            self._force.resize(self._force.shape[0]+1, axis=0)
             if self.convert_units:
-                self._force[-1] = self.convert_forces_to_native(ts.forces)
+                self._force[ts.frame] = self.convert_forces_to_native(ts.forces)
             else:
-                self._force[-1] = ts.forces
+                self._force[ts.frame] = ts.forces
 
         if self.data_keys:
             for key in self.data_keys:
-                self.obsv[f'{key}/value'].resize(
-                    self.obsv[f'{key}/value'].shape[0]+1, axis=0)
-                self.obsv[f'{key}/value'][-1] = ts.data[key]
+                self.obsv[f'{key}/value'][ts.frame] = ts.data[key]
 
 
 class H5PYPicklable(h5py.File):
