@@ -1152,30 +1152,28 @@ class H5MDWriter(base.WriterBase):
 
         """
 
-        self._step.resize(self._step.shape[0]+1, axis=0)
         try:
-            self._step[-1] = ts.data['step']
+            self._step[ts.frame] = ts.data['step']
         # step must exist in h5md file
         except(KeyError):
-            self._step[-1] = ts.frame
-        self._time.resize(self._time.shape[0]+1, axis=0)
-        self._time[-1] = ts.time
+            self._step[ts.frame] = ts.frame
+        self._time[ts.frame] = ts.time
 
         if 'edges' in self.traj['box']:
-            self._edges.resize(self._edges.shape[0]+1, axis=0)
-            self._edges[-1] = ts.triclinic_dimensions
+            self._edges.write_direct(ts.triclinic_dimensions,
+                                     dest_sel=np.s_[ts.frame])
 
         if self.has_positions:
-            self._pos.resize(self._pos.shape[0]+1, axis=0)
-            self._pos[-1] = ts.positions
+            self._pos.write_direct(ts.positions,
+                                   dest_sel=np.s_[ts.frame])
 
         if self.has_velocities:
-            self._vel.resize(self._vel.shape[0]+1, axis=0)
-            self._vel[-1] = ts.velocities
+            self._vel.write_direct(ts.velocities,
+                                   dest_sel=np.s_[ts.frame])
 
         if self.has_forces:
-            self._force.resize(self._force.shape[0]+1, axis=0)
-            self._force[-1] = ts.forces
+            self._force.write_direct(ts.forces,
+                                     dest_sel=np.s_[ts.frame])
 
         if self.data_keys:
             for key in self.data_keys:
@@ -1187,18 +1185,18 @@ class H5MDWriter(base.WriterBase):
     def _convert_units(self):
         """convert units"""
         if self.units['time'] is not None:
-            self._time[-1] = self.convert_time_to_native(self._time[-1])
+            self._time[ts.frame] = self.convert_time_to_native(self._time[ts.frame])
         if self.units['length'] is not None:
             if self.has_positions:
-                self._pos[-1] = self.convert_pos_to_native(self._pos[-1])
+                self._pos[ts.frame] = self.convert_pos_to_native(self._pos[ts.frame])
             if 'edges' in self.traj['box']:
-                self._edges[-1] = self.convert_pos_to_native(self._edges[-1])
+                self._edges[ts.frame] = self.convert_pos_to_native(self._edges[ts.frame])
         if self.has_velocities:
             if self.units['velocity'] is not None:
-                self._vel[-1] = self.convert_velocities_to_native(self._vel[-1])
+                self._vel[ts.frame] = self.convert_velocities_to_native(self._vel[ts.frame])
         if self.has_forces:
             if self.units['force'] is not None:
-                self._force[-1] = self.convert_forces_to_native(self._force[-1])
+                self._force[ts.frame] = self.convert_forces_to_native(self._force[ts.frame])
 
 
 class H5PYPicklable(h5py.File):
