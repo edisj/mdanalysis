@@ -215,7 +215,7 @@ from ..exceptions import NoDataError
 from ..due import due, Doi
 from MDAnalysis.lib.util import store_init_arguments
 from typing import Optional, Tuple, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 try:
     import h5py
@@ -239,12 +239,12 @@ else:
 @dataclass
 class _H5MDElement:
     obj: Dataset | Group
-    name: str = field(default=None)
-    value: Dataset = field(default=None)
-    step: Dataset = field(default=None)
-    time: Dataset = field(default=None)
-    step_offset: int = field(default=None)
-    time_offset: float = field(default=None)
+    name: str = None
+    value: Dataset = None
+    step: Dataset = None
+    time: Dataset = None
+    step_offset: int = None
+    time_offset: float = None
 
     def __post_init__(self):
         obj = self.obj
